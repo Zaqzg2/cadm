@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same warm off-white page colour as Kady's light scheme. -->
+    <color name="window_background">#FFF8F5F4</color>
+    <color name="ic_launcher_background">#FFC62828</color>
+</resources>
