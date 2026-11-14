@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.cady.cadymarketing.data.local.CadyMarketingDatabase
+import com.cady.cadymarketing.data.local.ContentDao
 import com.cady.cadymarketing.data.local.SyncMetaDao
 import dagger.Module
 import dagger.Provides
@@ -28,8 +29,13 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): CadyMarketingDatabase =
-        Room.databaseBuilder(context, CadyMarketingDatabase::class.java, CadyMarketingDatabase.NAME).build()
+        Room.databaseBuilder(context, CadyMarketingDatabase::class.java, CadyMarketingDatabase.NAME)
+            .addMigrations(CadyMarketingDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideSyncMetaDao(database: CadyMarketingDatabase): SyncMetaDao = database.syncMetaDao()
+
+    @Provides
+    fun provideContentDao(database: CadyMarketingDatabase): ContentDao = database.contentDao()
 }

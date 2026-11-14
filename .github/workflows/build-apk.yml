@@ -53,6 +53,15 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
+      # Unit tests: the engines are checked against the ORIGINAL tool's own outputs (GoldenParityTest) and
+      # against their invariants. A failure turns the run red but never stops the APK from being built.
+      - name: Run unit tests
+        id: tests
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee test-output.log
+        continue-on-error: true
+
       - name: Build debug APK
         id: build
         run: |
@@ -117,6 +126,25 @@ jobs:
           name: cady-marketing-debug-apk
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Fail job if build failed
-        if: steps.build.outcome == 'failure'
+      - name: Show test failures in the run summary
+        if: steps.tests.outcome == 'failure'
+        run: |
+          {
+            echo '### Unit test failures'
+            echo '```'
+            grep -E 'FAILED|AssertionError|expected:|What went wrong|^e: ' -A3 test-output.log | head -120 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test reports
+        if: steps.tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            test-output.log
+
+      - name: Fail job if the build or the tests failed
+        if: steps.build.outcome == 'failure' || steps.tests.outcome == 'failure'
         run: exit 1
