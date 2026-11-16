@@ -57,6 +57,9 @@ data class StudioState(
 
     val currentText: String get() = formulas.getOrNull(formulaIndex)?.text.orEmpty()
 
+    /** The picture the poster is drawn with: the one chosen for this post, else the one linked to the product. */
+    val effectivePicture: String? get() = pictureFile ?: product?.picturePath
+
     /** The approval gate: there is a text and no blocking error (warnings never block). */
     val canApprove: Boolean get() = product != null && currentText.isNotBlank() && check.passed
 }

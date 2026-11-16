@@ -41,8 +41,9 @@ object IdeaBank {
         channel: Channel,
         campaignCode: String?,
         random: Random = Random.Default,
+        withPriceLine: Set<String> = DefaultIdeas.withPriceLine,
     ): String {
-        val priceLine = if (angle in DefaultIdeas.withPriceLine) {
+        val priceLine = if (angle in withPriceLine) {
             val lines = if (product.hasOffer) vocab.offers else vocab.prices
             lines.randomOrNull(random)?.let { "\n$it" }.orEmpty()
         } else {

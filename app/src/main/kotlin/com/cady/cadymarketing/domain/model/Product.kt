@@ -12,6 +12,8 @@ data class Product(
     val offerPrice: Long? = null,
     val offerEnd: String = "",
     val features: List<String> = emptyList(),
+    /** A picture linked to this product on this device (file name in the app's storage), or null. */
+    val picturePath: String? = null,
 ) {
     val hasOffer: Boolean get() = (offerPrice ?: 0L) > 0L
 

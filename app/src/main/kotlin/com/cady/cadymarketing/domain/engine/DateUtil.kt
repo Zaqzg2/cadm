@@ -19,6 +19,13 @@ object DateUtil {
         calendar.get(Calendar.DAY_OF_MONTH),
     )
 
+    /** A moment in time (epoch milliseconds) as a local "yyyy-MM-dd" date. */
+    fun fromMillis(millis: Long): String {
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = millis
+        return format(calendar)
+    }
+
     /** The date picker returns UTC midnight milliseconds. */
     fun fromUtcMillis(millis: Long): String {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))

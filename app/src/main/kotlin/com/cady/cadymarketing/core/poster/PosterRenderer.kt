@@ -44,14 +44,15 @@ class PosterRenderer @Inject constructor(
         val key = listOf(
             product.id, product.name, product.unit, product.price, product.offerPrice, product.offerEnd,
             product.features.joinToString("|"), channel.code, designId, pictureFile,
-            brand.name, brand.primaryHex, brand.darkHex, brand.accentHex, brand.whatsapp, widthPx,
+            brand.name, brand.primaryHex, brand.darkHex, brand.accentHex, brand.whatsapp, brand.logoFile, widthPx,
         ).joinToString("#")
         if (cached) cache.get(key)?.let { return it }
 
         val height = (widthPx * channel.height.toFloat() / channel.width.toFloat()).roundToInt()
         val bitmap = Bitmap.createBitmap(widthPx, height, Bitmap.Config.ARGB_8888)
         val picture = pictureFile?.let { pictures.load(it, max(widthPx, height)) }
-        val spec = PosterSpec(product, brand, designId, picture, null)
+        val logo = brand.logoFile?.let { pictures.load(it, widthPx) }
+        val spec = PosterSpec(product, brand, designId, picture, logo)
         PosterDesigns.byId(designId).draw(PosterPainter(Canvas(bitmap), widthPx.toFloat(), height.toFloat(), spec, fonts))
         if (cached) cache.put(key, bitmap)
         return bitmap

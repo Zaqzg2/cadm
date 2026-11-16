@@ -16,6 +16,52 @@ object MiniJson {
         return value
     }
 
+    /**
+     * Compact JSON for Map / List / String / Number / Boolean / null. Whole numbers are written without a
+     * decimal point, so a value read back with [parse] (always a Double) round-trips as the same number.
+     */
+    fun write(value: Any?): String {
+        val out = StringBuilder()
+        writeTo(out, value)
+        return out.toString()
+    }
+
+    private fun writeTo(out: StringBuilder, value: Any?) {
+        when (value) {
+            null -> out.append("null")
+            is String -> out.append(quote(value))
+            is Boolean -> out.append(if (value) "true" else "false")
+            is Int -> out.append(value)
+            is Long -> out.append(value)
+            is Number -> {
+                val d = value.toDouble()
+                if (d == Math.rint(d) && Math.abs(d) < 1e15) out.append(d.toLong()) else out.append(d.toString())
+            }
+            is Map<*, *> -> {
+                out.append('{')
+                var first = true
+                for ((k, v) in value) {
+                    if (!first) out.append(',')
+                    first = false
+                    out.append(quote(k.toString())).append(':')
+                    writeTo(out, v)
+                }
+                out.append('}')
+            }
+            is Iterable<*> -> {
+                out.append('[')
+                var first = true
+                for (item in value) {
+                    if (!first) out.append(',')
+                    first = false
+                    writeTo(out, item)
+                }
+                out.append(']')
+            }
+            else -> out.append(quote(value.toString()))
+        }
+    }
+
     /** A JSON string literal, with quotes. */
     fun quote(value: String): String {
         val out = StringBuilder(value.length + 2)

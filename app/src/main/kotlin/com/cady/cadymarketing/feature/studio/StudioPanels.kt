@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.cady.cadymarketing.core.components.LocalPicture
 import com.cady.cadymarketing.core.poster.PosterDesigns
 import com.cady.cadymarketing.core.theme.cady
 import com.cady.cadymarketing.domain.engine.ArabicText
@@ -77,6 +78,7 @@ class StudioActions(
     val onPickDate: () -> Unit,
     val onPickTime: () -> Unit,
     val onClearSchedule: () -> Unit,
+    val loadThumb: suspend (String) -> android.graphics.Bitmap?,
 )
 
 /** The open tool's panel, or the check results when no tool is open. It scrolls; the preview above never moves. */
@@ -195,6 +197,7 @@ private fun ProductPanel(state: StudioState, actions: StudioActions) {
                     ProductCard(
                         product = product,
                         selected = product.id == state.productId,
+                        loader = actions.loadThumb,
                         onClick = { actions.onProduct(product.id) },
                         modifier = Modifier.weight(1f),
                     )
@@ -203,11 +206,17 @@ private fun ProductPanel(state: StudioState, actions: StudioActions) {
             }
         }
     }
-    Hint("الأصناف تجريبية حتى المرحلة 2، حيث تُقرأ من كادي مباشرة.")
+    Hint("الأصناف والأسعار والعروض تُقرأ من كادي. اربط صورة بكل صنف من «الأصناف والعروض» في «المزيد».")
 }
 
 @Composable
-private fun ProductCard(product: Product, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun ProductCard(
+    product: Product,
+    selected: Boolean,
+    loader: suspend (String) -> android.graphics.Bitmap?,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
     val scheme = MaterialTheme.colorScheme
     Card(
         onClick = onClick,
@@ -221,7 +230,13 @@ private fun ProductCard(product: Product, selected: Boolean, onClick: () -> Unit
                 .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(Icons.Filled.Inventory2, contentDescription = null, tint = scheme.primary, modifier = Modifier.size(28.dp))
+            LocalPicture(
+                fileName = product.picturePath,
+                loader = loader,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = product.name,
@@ -424,6 +439,9 @@ private fun PicturePanel(state: StudioState, actions: StudioActions) {
         if (state.pictureFile != null) {
             OutlinedButton(onClick = actions.onRemovePicture) { Text("إزالة الصورة") }
         }
+    }
+    if (state.pictureFile == null && state.product?.picturePath != null) {
+        Hint("الصورة الحالية هي صورة الصنف المرتبطة به. اختر صورة هنا لتخص هذا المنشور وحده.")
     }
     Hint("تُنسخ الصورة داخل التطبيق، فيبقى المنشور قابلًا لإعادة الرسم حتى لو حُذفت من المعرض.")
     Hint("تعرض الصورة المختارة: " + PosterDesigns.all.filter { it.usesPicture }.joinToString("، ") { it.label })

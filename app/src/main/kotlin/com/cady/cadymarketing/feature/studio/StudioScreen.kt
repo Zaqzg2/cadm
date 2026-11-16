@@ -83,6 +83,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.theme.cady
 import com.cady.cadymarketing.core.util.Clipboard
 import com.cady.cadymarketing.domain.engine.ClaimChecker
@@ -95,7 +96,11 @@ import kotlinx.coroutines.launch
  * tool's panel sits below them and never covers the preview, the six tools are at the very bottom.
  */
 @Composable
-fun StudioScreen(onClose: () -> Unit, viewModel: StudioViewModel = hiltViewModel()) {
+fun StudioScreen(
+    onClose: () -> Unit,
+    onOpenProducts: () -> Unit = {},
+    viewModel: StudioViewModel = hiltViewModel(),
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -176,6 +181,7 @@ fun StudioScreen(onClose: () -> Unit, viewModel: StudioViewModel = hiltViewModel
         onPickDate = { showDate = true },
         onPickTime = { showTime = true },
         onClearSchedule = viewModel::clearSchedule,
+        loadThumb = viewModel::loadThumb,
     )
 
     Scaffold(
@@ -207,6 +213,14 @@ fun StudioScreen(onClose: () -> Unit, viewModel: StudioViewModel = hiltViewModel
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
+            } else if (state.products.isEmpty()) {
+                EmptyState(
+                    icon = Icons.Filled.Inventory2,
+                    title = "لا توجد أصناف بعد",
+                    message = "الاستوديو يكتب عن أصناف كادي. اقرأ الأصناف من كادي أولًا ثم ارجع.",
+                    actionLabel = "فتح الأصناف والعروض",
+                    onAction = onOpenProducts,
+                )
             } else {
                 PreviewRow(state, compact = keyboardOpen)
                 if (!keyboardOpen) FormulaRow(state, viewModel::selectFormula)

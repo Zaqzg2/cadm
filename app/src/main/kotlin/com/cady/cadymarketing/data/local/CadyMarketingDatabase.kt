@@ -10,14 +10,25 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * fallback, because the marketing content lives here until it syncs.
  */
 @Database(
-    entities = [SyncMetaEntity::class, ContentEntity::class],
-    version = 2,
+    entities = [
+        SyncMetaEntity::class,
+        ContentEntity::class,
+        CatalogProductEntity::class,
+        CatalogOfferEntity::class,
+        ProductExtraEntity::class,
+        DocEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class CadyMarketingDatabase : RoomDatabase() {
     abstract fun syncMetaDao(): SyncMetaDao
 
     abstract fun contentDao(): ContentDao
+
+    abstract fun catalogDao(): CatalogDao
+
+    abstract fun docDao(): DocDao
 
     companion object {
         const val NAME = "cady_marketing.db"
@@ -50,6 +61,51 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
                         "PRIMARY KEY(`id`))",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_content_updatedAt` ON `content` (`updatedAt`)")
+            }
+        }
+
+        /** Phase 2: the catalogue copy from Kady, the per-product extras, and the stored documents (brand, vocabulary). */
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `catalog_product` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`unit` TEXT NOT NULL, " +
+                        "`price` INTEGER NOT NULL, " +
+                        "`active` INTEGER NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `catalog_offer` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`productId` TEXT NOT NULL, " +
+                        "`percent` REAL, " +
+                        "`offerPrice` INTEGER, " +
+                        "`amount` INTEGER, " +
+                        "`startDate` TEXT, " +
+                        "`endDate` TEXT, " +
+                        "`active` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_catalog_offer_productId` ON `catalog_offer` (`productId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `product_extra` (" +
+                        "`productId` TEXT NOT NULL, " +
+                        "`picturePath` TEXT, " +
+                        "`features` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`productId`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `mkt_doc` (" +
+                        "`docKey` TEXT NOT NULL, " +
+                        "`json` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`docKey`))",
+                )
             }
         }
     }

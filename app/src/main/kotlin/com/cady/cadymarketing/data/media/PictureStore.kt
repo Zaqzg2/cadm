@@ -47,6 +47,21 @@ class PictureStore @Inject constructor(
         }
     }
 
+    /** Copies a picked logo into the app, keeping its transparency (a PNG of at most 800 px). Returns its file name, or null. */
+    suspend fun importLogo(uri: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            val bitmap = decodeUri(uri, LOGO_MAX_SIDE) ?: return@withContext null
+            directory.mkdirs()
+            val name = "logo-" + UUID.randomUUID().toString() + ".png"
+            FileOutputStream(File(directory, name)).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            name
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Loads a stored picture, reduced so that its longest side is not much more than [maxSide]. */
     fun load(fileName: String, maxSide: Int): Bitmap? {
         val file = File(directory, fileName)
@@ -68,17 +83,17 @@ class PictureStore @Inject constructor(
         File(directory, fileName).delete()
     }
 
-    private fun decodeUri(uri: Uri): Bitmap? {
+    private fun decodeUri(uri: Uri, maxSide: Int = MAX_SIDE): Bitmap? {
         val resolver = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_SIDE) sample *= 2
+        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
         val options = BitmapFactory.Options().apply { inSampleSize = sample }
         val raw = resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) } ?: return null
         val upright = rotate(raw, exifDegrees(uri))
-        return scaleDown(upright, MAX_SIDE)
+        return scaleDown(upright, maxSide)
     }
 
     private fun exifDegrees(uri: Uri): Int = try {
@@ -122,6 +137,7 @@ class PictureStore @Inject constructor(
 
     private companion object {
         const val MAX_SIDE = 1200
+        const val LOGO_MAX_SIDE = 800
         const val JPEG_QUALITY = 85
     }
 }

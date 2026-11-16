@@ -1,17 +1,17 @@
 package com.cady.cadymarketing.data.product
 
+import com.cady.cadymarketing.data.catalog.CatalogRepository
 import com.cady.cadymarketing.domain.model.Product
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 
-/** Where the Studio gets its products. Phase 2 replaces the sample with the catalogue read from Kady. */
+/** Where the Studio gets its products. */
 interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
 }
 
-/** The products of the original tool's seed plus two clearly labelled test items, so every rule can be tried. */
+/** What stands in for Kady in preview mode: the original tool's seed plus two labelled test items, so every rule can be tried. */
 object SampleCatalog {
     val products: List<Product> = listOf(
         Product(
@@ -39,7 +39,10 @@ object SampleCatalog {
     )
 }
 
+/** The Studio's products: Kady's catalogue (or the sample one in preview mode), with offers, pictures and features. */
 @Singleton
-class SampleProductRepository @Inject constructor() : ProductRepository {
-    override fun observeProducts(): Flow<List<Product>> = flowOf(SampleCatalog.products)
+class CatalogProductRepository @Inject constructor(
+    private val catalog: CatalogRepository,
+) : ProductRepository {
+    override fun observeProducts(): Flow<List<Product>> = catalog.observeProducts()
 }

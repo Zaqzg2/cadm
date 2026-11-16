@@ -12,8 +12,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -55,6 +57,9 @@ fun MainShell(
     val showBottomBar = currentRoute == null || currentRoute in Routes.tabRoutes
     val goBack: () -> Unit = { navController.popBackStack() }
 
+    val shell: ShellViewModel = hiltViewModel()
+    LaunchedEffect(Unit) { shell.onShellOpened() }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
@@ -77,7 +82,9 @@ fun MainShell(
             popExitTransition = { fadeOut(tween(120)) },
         ) {
             composable(Routes.HOME) { HomeScreen() }
-            composable(Routes.STUDIO) { StudioScreen(onClose = goBack) }
+            composable(Routes.STUDIO) {
+                StudioScreen(onClose = goBack, onOpenProducts = { navController.navigate(Routes.PRODUCTS) })
+            }
             composable(Routes.CAMPAIGNS) { CampaignsScreen() }
             composable(Routes.CALENDAR) { CalendarScreen() }
             composable(Routes.MORE) {

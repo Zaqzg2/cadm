@@ -11,6 +11,7 @@ import com.cady.cadymarketing.data.media.PictureStore
 import com.cady.cadymarketing.data.product.ProductRepository
 import com.cady.cadymarketing.data.settings.SettingsStore
 import com.cady.cadymarketing.data.settings.StudioPrefs
+import com.cady.cadymarketing.data.vocab.VocabularyRepository
 import com.cady.cadymarketing.domain.engine.ClaimChecker
 import com.cady.cadymarketing.domain.engine.CopyGenerator
 import com.cady.cadymarketing.domain.engine.DateUtil
@@ -20,7 +21,10 @@ import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.GatewayException
 import com.cady.cadymarketing.domain.engine.GenerationRequest
 import com.cady.cadymarketing.domain.engine.IdeaBank
+import com.cady.cadymarketing.domain.engine.MergedVocabulary
 import com.cady.cadymarketing.domain.engine.Placeholders
+import com.cady.cadymarketing.domain.engine.VocabularyEdits
+import com.cady.cadymarketing.domain.engine.VocabularyMerge
 import com.cady.cadymarketing.domain.model.Brand
 import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.CheckResult
@@ -58,6 +62,7 @@ class StudioViewModel @Inject constructor(
     private val pictures: PictureStore,
     private val exporter: ImageExporter,
     private val renderer: PosterRenderer,
+    private val vocabularyRepository: VocabularyRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StudioState())
@@ -65,6 +70,9 @@ class StudioViewModel @Inject constructor(
 
     private val _events = MutableSharedFlow<StudioEvent>(extraBufferCapacity = 16)
     val events: SharedFlow<StudioEvent> = _events.asSharedFlow()
+
+    /** The vocabulary in force: the built-in bank with the manager's edits (read once when the Studio opens). */
+    private var vocab: MergedVocabulary = VocabularyMerge.merge(VocabularyEdits())
 
     /** Phrases used recently, oldest first (see PhraseMemory). */
     private var used: List<String> = emptyList()
@@ -79,11 +87,17 @@ class StudioViewModel @Inject constructor(
         viewModelScope.launch {
             val prefs = settings.studioPrefs.first()
             used = settings.usedPhrases.first()
+            vocab = vocabularyRepository.observeMerged().first()
+            val tones = vocab.tones.keys.toList()
+            val angles = vocab.ideas.keys.toList()
+            val defaultTone = if (DefaultVocabulary.DEFAULT_TONE in tones) DefaultVocabulary.DEFAULT_TONE else tones.first()
             _state.update { s ->
                 s.copy(
                     channel = Channel.fromCode(prefs.channel),
-                    tone = prefs.tone?.takeIf { it in s.tones } ?: s.tone,
-                    angle = prefs.angle?.takeIf { it in s.angles } ?: s.angle,
+                    tones = tones,
+                    angles = angles,
+                    tone = prefs.tone?.takeIf { it in tones } ?: defaultTone,
+                    angle = prefs.angle?.takeIf { it in angles } ?: angles.first(),
                     designId = prefs.designId?.takeIf { id -> renderer.designs.any { it.id == id } } ?: s.designId,
                 )
             }
@@ -166,13 +180,13 @@ class StudioViewModel @Inject constructor(
         val s = _state.value
         val product = s.product ?: return
         val result = CopyGenerator.generate(
-            GenerationRequest(product, s.brand, s.channel, s.tone, null, DefaultVocabulary.tones, used),
+            GenerationRequest(product, s.brand, s.channel, s.tone, null, vocab.tones, used),
         )
         used = result.used
         persistUsed()
         val fresh = listOf(CopyGenerator.direct(product, s.brand, s.channel, null)) +
             result.formulas +
-            DefaultVocabulary.templates.map { CopyGenerator.fromTemplate(it, product, s.brand, s.channel, null) }
+            vocab.templates.map { CopyGenerator.fromTemplate(it, product, s.brand, s.channel, null) }
         val keptEdit = if (textEdited && s.currentText.isNotBlank()) Formula(EDITED_FORMULA, s.currentText) else null
         _state.update {
             it.copy(
@@ -257,7 +271,7 @@ class StudioViewModel @Inject constructor(
     private fun localIdeas() {
         val s = _state.value
         val product = s.product ?: return
-        val result = IdeaBank.local(s.angle, product, s.brand, s.channel, null, used)
+        val result = IdeaBank.local(s.angle, product, s.brand, s.channel, null, used, bank = vocab.ideas)
         used = result.used
         persistUsed()
         _state.update { it.copy(ideas = result.ideas) }
@@ -268,8 +282,8 @@ class StudioViewModel @Inject constructor(
         val s = _state.value
         val product = s.product ?: return
         val idea = s.ideas.getOrNull(index) ?: return
-        val vocab = DefaultVocabulary.tones[s.tone] ?: DefaultVocabulary.tones.values.first()
-        val text = IdeaBank.toPost(idea, s.angle, vocab, product, s.brand, s.channel, null)
+        val toneVocabulary = vocab.tones[s.tone] ?: vocab.tones.values.first()
+        val text = IdeaBank.toPost(idea, s.angle, toneVocabulary, product, s.brand, s.channel, null, withPriceLine = vocab.priceAngles)
         _state.update { st ->
             st.copy(
                 formulas = listOf(Formula(IDEA_FORMULA, text)) + st.formulas.filter { it.name != IDEA_FORMULA },
@@ -448,7 +462,7 @@ class StudioViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val bitmap = withContext(Dispatchers.Default) {
-                    renderer.renderFull(product, s.brand, s.channel, s.designId, s.pictureFile)
+                    renderer.renderFull(product, s.brand, s.channel, s.designId, s.effectivePicture)
                 }
                 val uri = exporter.shareUri(bitmap)
                 _events.emit(StudioEvent.Share(uri, s.currentText, target.packageName))
@@ -464,7 +478,7 @@ class StudioViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val bitmap = withContext(Dispatchers.Default) {
-                    renderer.renderFull(product, s.brand, s.channel, s.designId, s.pictureFile)
+                    renderer.renderFull(product, s.brand, s.channel, s.designId, s.effectivePicture)
                 }
                 note("حُفظت الصورة في " + exporter.saveToDownloads(bitmap))
             } catch (e: IOException) {
@@ -487,7 +501,7 @@ class StudioViewModel @Inject constructor(
             val s = _state.value
             val product = s.product ?: return@launch
             val bitmap = withContext(Dispatchers.Default) {
-                renderer.render(product, s.brand, s.channel, s.designId, s.pictureFile, PREVIEW_WIDTH)
+                renderer.render(product, s.brand, s.channel, s.designId, s.effectivePicture, PREVIEW_WIDTH)
             }
             _state.update { it.copy(preview = bitmap) }
         }
@@ -500,12 +514,16 @@ class StudioViewModel @Inject constructor(
             val product = s.product ?: return@launch
             val thumbs = withContext(Dispatchers.Default) {
                 renderer.designs.associate { design ->
-                    design.id to renderer.render(product, s.brand, s.channel, design.id, s.pictureFile, THUMB_WIDTH)
+                    design.id to renderer.render(product, s.brand, s.channel, design.id, s.effectivePicture, THUMB_WIDTH)
                 }
             }
             _state.update { it.copy(thumbs = thumbs) }
         }
     }
+
+    /** A stored picture for a small card (the product grid). */
+    suspend fun loadThumb(fileName: String): android.graphics.Bitmap? =
+        withContext(Dispatchers.IO) { pictures.load(fileName, CARD_THUMB_SIDE) }
 
     // ------------------------------------------------------------------ small helpers
 
@@ -528,6 +546,7 @@ class StudioViewModel @Inject constructor(
     private companion object {
         const val PREVIEW_WIDTH = 540
         const val THUMB_WIDTH = 220
+        const val CARD_THUMB_SIDE = 240
         const val PREVIEW_DEBOUNCE_MS = 120L
         const val DEFAULT_TIME = "09:00"
         const val IDEA_FORMULA = "فكرة"
