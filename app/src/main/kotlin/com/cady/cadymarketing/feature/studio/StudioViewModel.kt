@@ -1,10 +1,12 @@
 package com.cady.cadymarketing.feature.studio
 
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cady.cadymarketing.core.poster.PosterRenderer
 import com.cady.cadymarketing.data.brand.BrandRepository
+import com.cady.cadymarketing.data.campaign.CampaignRepository
 import com.cady.cadymarketing.data.content.ContentRepository
 import com.cady.cadymarketing.data.media.ImageExporter
 import com.cady.cadymarketing.data.media.PictureStore
@@ -12,8 +14,10 @@ import com.cady.cadymarketing.data.product.ProductRepository
 import com.cady.cadymarketing.data.settings.SettingsStore
 import com.cady.cadymarketing.data.settings.StudioPrefs
 import com.cady.cadymarketing.data.vocab.VocabularyRepository
+import com.cady.cadymarketing.domain.engine.CalendarMath
 import com.cady.cadymarketing.domain.engine.ClaimChecker
 import com.cady.cadymarketing.domain.engine.CopyGenerator
+import com.cady.cadymarketing.domain.engine.DailyIdeas
 import com.cady.cadymarketing.domain.engine.DateUtil
 import com.cady.cadymarketing.domain.engine.DefaultVocabulary
 import com.cady.cadymarketing.domain.engine.GatewayClient
@@ -21,11 +25,13 @@ import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.GatewayException
 import com.cady.cadymarketing.domain.engine.GenerationRequest
 import com.cady.cadymarketing.domain.engine.IdeaBank
+import com.cady.cadymarketing.domain.engine.LinkBuilder
 import com.cady.cadymarketing.domain.engine.MergedVocabulary
 import com.cady.cadymarketing.domain.engine.Placeholders
 import com.cady.cadymarketing.domain.engine.VocabularyEdits
 import com.cady.cadymarketing.domain.engine.VocabularyMerge
 import com.cady.cadymarketing.domain.model.Brand
+import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.CheckResult
 import com.cady.cadymarketing.domain.model.ContentStatus
@@ -51,6 +57,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.random.Random
 
 @HiltViewModel
 class StudioViewModel @Inject constructor(
@@ -63,6 +70,8 @@ class StudioViewModel @Inject constructor(
     private val exporter: ImageExporter,
     private val renderer: PosterRenderer,
     private val vocabularyRepository: VocabularyRepository,
+    private val campaignRepository: CampaignRepository,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StudioState())
@@ -82,6 +91,12 @@ class StudioViewModel @Inject constructor(
     private var textEdited = false
     private var previewJob: Job? = null
     private var thumbsJob: Job? = null
+
+    /** What the screen that opened the Studio asked it to start on; applied once the products and campaigns are in. */
+    private val request: StudioLaunch = StudioLaunch.from(savedStateHandle)
+    private var requestApplied = request.isEmpty
+    private var productsReady = false
+    private var campaignsReady = false
 
     init {
         viewModelScope.launch {
@@ -103,6 +118,7 @@ class StudioViewModel @Inject constructor(
             }
             launch { brandRepository.observeBrand().collect { brand -> onBrand(brand) } }
             launch { productRepository.observeProducts().collect { list -> onProducts(list) } }
+            launch { campaignRepository.observeAll().collect { list -> onCampaigns(list) } }
             launch { contentRepository.observeRecent().collect { list -> _state.update { it.copy(saved = list) } } }
             launch { settings.gatewayConfig.collect { config -> _state.update { it.copy(gateway = config) } } }
         }
@@ -129,6 +145,50 @@ class StudioViewModel @Inject constructor(
             recheck()
         }
         refreshVisuals()
+        productsReady = true
+        applyRequestIfReady()
+    }
+
+    private fun onCampaigns(list: List<Campaign>) {
+        _state.update { s -> s.copy(campaigns = list, campaignId = s.campaignId?.takeIf { id -> list.any { it.id == id } }) }
+        campaignsReady = true
+        applyRequestIfReady()
+    }
+
+    /** Starts the Studio on what the opening screen asked for, once (a saved post, a campaign, a day, a product, the idea). */
+    private fun applyRequestIfReady() {
+        if (requestApplied || !productsReady || !campaignsReady) return
+        requestApplied = true
+        viewModelScope.launch {
+            val contentId = request.contentId
+            if (contentId != null) {
+                val content = contentRepository.get(contentId)
+                if (content != null) {
+                    loadSaved(content)
+                    return@launch
+                }
+                note("المحتوى المطلوب لم يعد موجودًا")
+            }
+            request.productId?.let { id -> if (_state.value.products.any { it.id == id }) selectProduct(id) }
+            request.campaignId?.let { id -> if (_state.value.campaigns.any { it.id == id }) selectCampaign(id) }
+            request.date?.let { setScheduleDate(it) }
+            if (request.ideaOfDay) applyIdeaOfDay()
+            // Nothing here was typed by the person, so closing right away must not ask to discard anything.
+            _state.update { it.copy(dirty = false) }
+        }
+    }
+
+    /** Opens on the idea of the day, written as a post (the same pick the home screen shows). */
+    private fun applyIdeaOfDay() {
+        val today = DateUtil.today()
+        val pick = DailyIdeas.pick(today, _state.value.products, vocab.ideas, _state.value.brand) ?: return
+        selectProduct(pick.product.id)
+        val s = _state.value
+        val product = s.product ?: return
+        val seed = CalendarMath.dayNumber(today) ?: return
+        val ideas = IdeaBank.local(pick.angle, product, s.brand, s.channel, s.campaign?.code, emptyList(), Random(seed), 1, vocab.ideas).ideas
+        _state.update { it.copy(angle = if (pick.angle in it.angles) pick.angle else it.angle, ideas = ideas) }
+        useIdea(0)
     }
 
     // ------------------------------------------------------------------ choices
@@ -180,13 +240,13 @@ class StudioViewModel @Inject constructor(
         val s = _state.value
         val product = s.product ?: return
         val result = CopyGenerator.generate(
-            GenerationRequest(product, s.brand, s.channel, s.tone, null, vocab.tones, used),
+            GenerationRequest(product, s.brand, s.channel, s.tone, s.campaign?.code, vocab.tones, used),
         )
         used = result.used
         persistUsed()
-        val fresh = listOf(CopyGenerator.direct(product, s.brand, s.channel, null)) +
+        val fresh = listOf(CopyGenerator.direct(product, s.brand, s.channel, s.campaign?.code)) +
             result.formulas +
-            vocab.templates.map { CopyGenerator.fromTemplate(it, product, s.brand, s.channel, null) }
+            vocab.templates.map { CopyGenerator.fromTemplate(it, product, s.brand, s.channel, s.campaign?.code) }
         val keptEdit = if (textEdited && s.currentText.isNotBlank()) Formula(EDITED_FORMULA, s.currentText) else null
         _state.update {
             it.copy(
@@ -271,7 +331,7 @@ class StudioViewModel @Inject constructor(
     private fun localIdeas() {
         val s = _state.value
         val product = s.product ?: return
-        val result = IdeaBank.local(s.angle, product, s.brand, s.channel, null, used, bank = vocab.ideas)
+        val result = IdeaBank.local(s.angle, product, s.brand, s.channel, s.campaign?.code, used, bank = vocab.ideas)
         used = result.used
         persistUsed()
         _state.update { it.copy(ideas = result.ideas) }
@@ -283,7 +343,7 @@ class StudioViewModel @Inject constructor(
         val product = s.product ?: return
         val idea = s.ideas.getOrNull(index) ?: return
         val toneVocabulary = vocab.tones[s.tone] ?: vocab.tones.values.first()
-        val text = IdeaBank.toPost(idea, s.angle, toneVocabulary, product, s.brand, s.channel, null, withPriceLine = vocab.priceAngles)
+        val text = IdeaBank.toPost(idea, s.angle, toneVocabulary, product, s.brand, s.channel, s.campaign?.code, withPriceLine = vocab.priceAngles)
         _state.update { st ->
             st.copy(
                 formulas = listOf(Formula(IDEA_FORMULA, text)) + st.formulas.filter { it.name != IDEA_FORMULA },
@@ -304,7 +364,7 @@ class StudioViewModel @Inject constructor(
                 val posts = gateway.generatePosts(s.gateway, product, s.brand, s.tone)
                 val added = posts.mapIndexed { i, post ->
                     val text = if (post.contains("{الرابط}")) post else post + "\n{الرابط}"
-                    Formula("ذكاء ${i + 1}", Placeholders.fill(text, product, s.brand, s.channel, null))
+                    Formula("ذكاء ${i + 1}", Placeholders.fill(text, product, s.brand, s.channel, s.campaign?.code))
                 }
                 _state.update { st ->
                     st.copy(formulas = st.formulas + added, formulaIndex = st.formulas.size, dirty = true)
@@ -383,6 +443,41 @@ class StudioViewModel @Inject constructor(
         _state.update { it.copy(scheduledAt = null, dirty = true) }
     }
 
+    // ------------------------------------------------------------------ campaign
+
+    /**
+     * Links the post to a campaign (or, with null, unlinks it). The campaign's code rides on the links of the text,
+     * so the old link is swapped for the new one in every formula: nothing the person typed is lost.
+     */
+    fun selectCampaign(id: String?) {
+        val s = _state.value
+        val next = id?.let { wanted -> s.campaigns.firstOrNull { it.id == wanted } }
+        val oldLink = LinkBuilder.build(s.brand, s.channel, s.campaign?.code)
+        val newLink = LinkBuilder.build(s.brand, s.channel, next?.code)
+        _state.update { st ->
+            st.copy(
+                campaignId = next?.id,
+                formulas = st.formulas.map { formula -> formula.copy(text = formula.text.replace(oldLink, newLink)) },
+                dirty = true,
+            )
+        }
+        recheck()
+    }
+
+    /** Makes a campaign from just its name (more is set on the campaigns screen) and links the post to it. */
+    fun createCampaign(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return note("اكتب اسم الحملة")
+        viewModelScope.launch {
+            val campaign = campaignRepository.create(clean, "", null, null)
+            _state.update { st ->
+                if (st.campaigns.any { it.id == campaign.id }) st else st.copy(campaigns = listOf(campaign) + st.campaigns)
+            }
+            selectCampaign(campaign.id)
+            note("أُنشئت الحملة «${campaign.name}» برمز ${campaign.code}")
+        }
+    }
+
     // ------------------------------------------------------------------ save, restore, delete
 
     fun save(approve: Boolean) {
@@ -405,8 +500,8 @@ class StudioViewModel @Inject constructor(
                     designId = s.designId,
                     picturePath = s.pictureFile,
                     scheduledAt = s.scheduledAt,
-                    campaignId = null,
-                    campaignCode = null,
+                    campaignId = s.campaign?.id,
+                    campaignCode = s.campaign?.code,
                     tone = s.tone,
                     angle = s.angle,
                     createdAt = existing?.createdAt ?: now,
@@ -431,6 +526,7 @@ class StudioViewModel @Inject constructor(
                 designId = content.designId,
                 pictureFile = content.picturePath,
                 scheduledAt = content.scheduledAt,
+                campaignId = content.campaignId?.takeIf { id -> it.campaigns.any { campaign -> campaign.id == id } },
                 formulas = listOf(Formula(LOADED_FORMULA, content.text)),
                 formulaIndex = 0,
                 editingId = content.id,

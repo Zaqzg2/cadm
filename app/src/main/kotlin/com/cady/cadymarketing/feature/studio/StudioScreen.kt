@@ -110,6 +110,7 @@ fun StudioScreen(
     var showClose by remember { mutableStateOf(false) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
+    var showNewCampaign by remember { mutableStateOf(false) }
 
     // While the keyboard is open the poster shrinks and the formulas row hides, so the text field keeps room.
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
@@ -181,6 +182,8 @@ fun StudioScreen(
         onPickDate = { showDate = true },
         onPickTime = { showTime = true },
         onClearSchedule = viewModel::clearSchedule,
+        onCampaign = viewModel::selectCampaign,
+        onNewCampaign = { showNewCampaign = true },
         loadThumb = viewModel::loadThumb,
     )
 
@@ -263,6 +266,15 @@ fun StudioScreen(
                 onClose()
             },
             onKeep = { showClose = false },
+        )
+    }
+    if (showNewCampaign) {
+        NewCampaignDialog(
+            onCreate = { name ->
+                viewModel.createCampaign(name)
+                showNewCampaign = false
+            },
+            onDismiss = { showNewCampaign = false },
         )
     }
     if (showDate) {

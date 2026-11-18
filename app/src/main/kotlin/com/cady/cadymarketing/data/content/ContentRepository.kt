@@ -5,6 +5,7 @@ import com.cady.cadymarketing.data.local.ContentEntity
 import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.ContentStatus
 import com.cady.cadymarketing.domain.model.SavedContent
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +18,39 @@ class ContentRepository @Inject constructor(
     fun observeRecent(limit: Int = 30): Flow<List<SavedContent>> =
         dao.observeRecent(limit).map { rows -> rows.map { it.toDomain() } }
 
+    /** Every saved post that is not deleted, newest change first (the library). */
+    fun observeAll(): Flow<List<SavedContent>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
+
+    fun observeByCampaign(campaignId: String): Flow<List<SavedContent>> =
+        dao.observeByCampaign(campaignId).map { rows -> rows.map { it.toDomain() } }
+
     suspend fun get(id: String): SavedContent? = dao.get(id)?.toDomain()
+
+    /** Moves a post to another status (publish, archive, return to draft...). */
+    suspend fun setStatus(id: String, status: ContentStatus) {
+        dao.setStatus(id, status.code, System.currentTimeMillis())
+    }
+
+    /**
+     * A copy of a post as a new draft: same text, channel, design, picture, campaign and schedule, new identity.
+     * Returns the new id, or null when the original no longer exists.
+     */
+    suspend fun duplicate(id: String): String? {
+        val original = dao.get(id) ?: return null
+        val now = System.currentTimeMillis()
+        val copyId = UUID.randomUUID().toString()
+        dao.upsert(
+            original.copy(
+                id = copyId,
+                number = null,
+                status = ContentStatus.DRAFT.code,
+                createdAt = now,
+                updatedAt = now,
+                deletedAt = null,
+            ),
+        )
+        return copyId
+    }
 
     /** Inserts, or updates the row with the same id (keeping the fields the Studio does not edit). */
     suspend fun save(content: SavedContent) {

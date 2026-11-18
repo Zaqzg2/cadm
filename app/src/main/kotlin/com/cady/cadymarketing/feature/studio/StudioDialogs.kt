@@ -151,6 +151,34 @@ fun GatewayDialog(
     )
 }
 
+/** A campaign made on the spot from just its name; its dates and goal are set later on the campaigns screen. */
+@Composable
+fun NewCampaignDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("حملة جديدة") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("اسم الحملة") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = "تُعطى الحملة رمزًا قصيرًا يحمله كل رابط فيها. التواريخ والهدف من شاشة «الحملات».",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onCreate(name) }, enabled = name.isNotBlank()) { Text("إنشاء وربط") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+    )
+}
+
 @Composable
 fun CloseConfirmDialog(onDiscard: () -> Unit, onKeep: () -> Unit) {
     AlertDialog(

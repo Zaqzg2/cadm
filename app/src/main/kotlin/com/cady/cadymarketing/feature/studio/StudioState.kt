@@ -6,6 +6,7 @@ import com.cady.cadymarketing.domain.engine.DefaultVocabulary
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.IdeaBank
 import com.cady.cadymarketing.domain.model.Brand
+import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.CheckResult
 import com.cady.cadymarketing.domain.model.Formula
@@ -39,6 +40,8 @@ data class StudioState(
     val pictureFile: String? = null,
     /** "yyyy-MM-ddTHH:mm", or null when no schedule is set. */
     val scheduledAt: String? = null,
+    val campaigns: List<Campaign> = emptyList(),
+    val campaignId: String? = null,
     val openTool: StudioTool? = null,
     val ideas: List<String> = emptyList(),
     val check: CheckResult = CheckResult.Empty,
@@ -54,6 +57,9 @@ data class StudioState(
     val dirty: Boolean = false,
 ) {
     val product: Product? get() = products.firstOrNull { it.id == productId }
+
+    /** The campaign the post is linked to: its code rides on every link of the text. */
+    val campaign: Campaign? get() = campaigns.firstOrNull { it.id == campaignId }
 
     val currentText: String get() = formulas.getOrNull(formulaIndex)?.text.orEmpty()
 

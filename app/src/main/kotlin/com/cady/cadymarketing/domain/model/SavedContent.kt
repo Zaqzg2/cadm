@@ -17,4 +17,12 @@ data class SavedContent(
     val angle: String?,
     val createdAt: Long,
     val updatedAt: Long,
-)
+) {
+    /** The day the post is scheduled for ("yyyy-MM-dd"), or null when it has no schedule. */
+    val scheduledDate: String?
+        get() = scheduledAt?.substringBefore('T')?.takeIf { it.length == DATE_LENGTH }
+
+    private companion object {
+        const val DATE_LENGTH = 10
+    }
+}

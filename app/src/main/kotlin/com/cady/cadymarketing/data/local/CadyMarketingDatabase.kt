@@ -17,8 +17,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CatalogOfferEntity::class,
         ProductExtraEntity::class,
         DocEntity::class,
+        CampaignEntity::class,
+        OccasionEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class CadyMarketingDatabase : RoomDatabase() {
@@ -29,6 +31,10 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
     abstract fun catalogDao(): CatalogDao
 
     abstract fun docDao(): DocDao
+
+    abstract fun campaignDao(): CampaignDao
+
+    abstract fun occasionDao(): OccasionDao
 
     companion object {
         const val NAME = "cady_marketing.db"
@@ -106,6 +112,45 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
                         "`deletedAt` INTEGER, " +
                         "PRIMARY KEY(`docKey`))",
                 )
+            }
+        }
+
+        /** Phase 3: the campaigns and the calendar's own occasions. The SQL must match CampaignEntities.kt exactly. */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `campaign` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`code` TEXT NOT NULL, " +
+                        "`number` TEXT, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`goal` TEXT NOT NULL, " +
+                        "`startDate` TEXT, " +
+                        "`endDate` TEXT, " +
+                        "`status` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_campaign_updatedAt` ON `campaign` (`updatedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_campaign_code` ON `campaign` (`code`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `occasion` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`date` TEXT NOT NULL, " +
+                        "`yearly` INTEGER NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_occasion_updatedAt` ON `occasion` (`updatedAt`)")
             }
         }
     }

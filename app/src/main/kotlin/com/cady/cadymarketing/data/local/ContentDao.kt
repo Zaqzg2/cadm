@@ -10,8 +10,17 @@ interface ContentDao {
     @Query("SELECT * FROM content WHERE deletedAt IS NULL ORDER BY updatedAt DESC LIMIT :limit")
     fun observeRecent(limit: Int): Flow<List<ContentEntity>>
 
+    @Query("SELECT * FROM content WHERE deletedAt IS NULL ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<ContentEntity>>
+
+    @Query("SELECT * FROM content WHERE deletedAt IS NULL AND campaignId = :campaignId ORDER BY updatedAt DESC")
+    fun observeByCampaign(campaignId: String): Flow<List<ContentEntity>>
+
     @Query("SELECT * FROM content WHERE id = :id AND deletedAt IS NULL")
     suspend fun get(id: String): ContentEntity?
+
+    @Query("UPDATE content SET status = :status, updatedAt = :at WHERE id = :id AND deletedAt IS NULL")
+    suspend fun setStatus(id: String, status: String, at: Long)
 
     @Upsert
     suspend fun upsert(entity: ContentEntity)

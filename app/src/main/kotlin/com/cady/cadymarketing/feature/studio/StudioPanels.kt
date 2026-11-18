@@ -51,6 +51,7 @@ import com.cady.cadymarketing.core.components.LocalPicture
 import com.cady.cadymarketing.core.poster.PosterDesigns
 import com.cady.cadymarketing.core.theme.cady
 import com.cady.cadymarketing.domain.engine.ArabicText
+import com.cady.cadymarketing.domain.model.CampaignStatus
 import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.CheckResult
 import com.cady.cadymarketing.domain.model.Issue
@@ -78,6 +79,8 @@ class StudioActions(
     val onPickDate: () -> Unit,
     val onPickTime: () -> Unit,
     val onClearSchedule: () -> Unit,
+    val onCampaign: (String?) -> Unit,
+    val onNewCampaign: () -> Unit,
     val loadThumb: suspend (String) -> android.graphics.Bitmap?,
 )
 
@@ -452,10 +455,37 @@ private fun PicturePanel(state: StudioState, actions: StudioActions) {
 @Composable
 private fun SchedulePanel(state: StudioState, actions: StudioActions) {
     SectionLabel("الحملة")
-    Row(modifier = Modifier.padding(horizontal = 12.dp)) {
-        FilterChip(selected = true, onClick = {}, label = { Text("بلا حملة") })
+    Row(
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FilterChip(
+            selected = state.campaignId == null,
+            onClick = { actions.onCampaign(null) },
+            label = { Text("بلا حملة") },
+        )
+        state.campaigns
+            .filter { it.status != CampaignStatus.ENDED || it.id == state.campaignId }
+            .forEach { campaign ->
+                FilterChip(
+                    selected = campaign.id == state.campaignId,
+                    onClick = { actions.onCampaign(campaign.id) },
+                    label = { Text(campaign.name) },
+                )
+            }
+        OutlinedButton(onClick = actions.onNewCampaign) { Text("+ حملة جديدة") }
     }
-    Hint("الحملات تُنشأ في المرحلة 3، وتُربط بالمحتوى من هنا.")
+    val linked = state.campaign
+    Hint(
+        if (linked == null) {
+            "اختر حملة لتحمل روابط المنشور رمزها، فيُنسب كل طلب إلى الحملة."
+        } else {
+            "رمز الحملة ${linked.code}: روابط النص تحمله، فيُنسب كل طلب يأتي منها إلى «${linked.name}»."
+        },
+    )
 
     SectionLabel("موعد النشر")
     val schedule = state.scheduledAt

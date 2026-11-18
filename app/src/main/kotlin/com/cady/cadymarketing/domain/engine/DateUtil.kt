@@ -11,6 +11,17 @@ import java.util.TimeZone
 object DateUtil {
     fun today(): String = format(Calendar.getInstance())
 
+    /** The current local time as "yyyy-MM-ddTHH:mm", the same shape as a post's schedule, so the two compare as text. */
+    fun nowMinute(): String {
+        val calendar = Calendar.getInstance()
+        return format(calendar) + String.format(
+            Locale.US,
+            "T%02d:%02d",
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+        )
+    }
+
     fun format(calendar: Calendar): String = String.format(
         Locale.US,
         "%04d-%02d-%02d",

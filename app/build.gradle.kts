@@ -145,5 +145,8 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    // QR codes for campaign links, generated on the device.
+    implementation(libs.zxing.core)
+
     testImplementation(libs.junit)
 }
