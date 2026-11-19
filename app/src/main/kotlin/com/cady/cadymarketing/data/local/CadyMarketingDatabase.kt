@@ -19,8 +19,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DocEntity::class,
         CampaignEntity::class,
         OccasionEntity::class,
+        CustomerEntity::class,
+        ConsentEntity::class,
+        SegmentEntity::class,
+        SendMarkEntity::class,
+        ResultEntity::class,
+        OrderEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class CadyMarketingDatabase : RoomDatabase() {
@@ -35,6 +41,10 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
     abstract fun campaignDao(): CampaignDao
 
     abstract fun occasionDao(): OccasionDao
+
+    abstract fun audienceDao(): AudienceDao
+
+    abstract fun reportDao(): ReportDao
 
     companion object {
         const val NAME = "cady_marketing.db"
@@ -151,6 +161,97 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
                         "PRIMARY KEY(`id`))",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_occasion_updatedAt` ON `occasion` (`updatedAt`)")
+            }
+        }
+
+        /** Phase 4: the customers copy, consent, segments, send lists, results by hand and the orders read for the reports. */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `customer_copy` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`phone` TEXT, " +
+                        "`rawPhone` TEXT NOT NULL, " +
+                        "`area` TEXT NOT NULL, " +
+                        "`repName` TEXT NOT NULL, " +
+                        "`active` INTEGER NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `consent` (" +
+                        "`customerId` TEXT NOT NULL, " +
+                        "`status` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`customerId`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_consent_updatedAt` ON `consent` (`updatedAt`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `segment` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, " +
+                        "`area` TEXT NOT NULL, " +
+                        "`repName` TEXT NOT NULL, " +
+                        "`memberIds` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_segment_updatedAt` ON `segment` (`updatedAt`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `send_mark` (" +
+                        "`contentId` TEXT NOT NULL, " +
+                        "`customerId` TEXT NOT NULL, " +
+                        "`status` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`contentId`, `customerId`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_send_mark_updatedAt` ON `send_mark` (`updatedAt`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `result` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`campaignId` TEXT NOT NULL, " +
+                        "`channel` TEXT, " +
+                        "`metric` TEXT NOT NULL, " +
+                        "`value` INTEGER NOT NULL, " +
+                        "`date` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL, " +
+                        "`deletedAt` INTEGER, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_result_updatedAt` ON `result` (`updatedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_result_campaignId` ON `result` (`campaignId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `report_order` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`origin` TEXT NOT NULL, " +
+                        "`campaignCode` TEXT NOT NULL, " +
+                        "`channel` TEXT, " +
+                        "`amount` INTEGER, " +
+                        "`date` TEXT, " +
+                        "`cancelled` INTEGER NOT NULL, " +
+                        "`fetchedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_report_order_origin` ON `report_order` (`origin`)")
             }
         }
     }

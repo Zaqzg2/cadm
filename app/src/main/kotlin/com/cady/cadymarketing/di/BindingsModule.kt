@@ -3,6 +3,10 @@ package com.cady.cadymarketing.di
 import com.cady.cadymarketing.data.brand.BrandRepository
 import com.cady.cadymarketing.data.brand.RoomBrandRepository
 import com.cady.cadymarketing.data.cloud.CatalogSource
+import com.cady.cadymarketing.data.cloud.CustomerSource
+import com.cady.cadymarketing.data.cloud.FirestoreCustomerSource
+import com.cady.cadymarketing.data.cloud.FirestoreOrderSource
+import com.cady.cadymarketing.data.cloud.OrderSource
 import com.cady.cadymarketing.data.cloud.FirestoreCatalogSource
 import com.cady.cadymarketing.data.gateway.HttpGatewayTransport
 import com.cady.cadymarketing.data.product.CatalogProductRepository
@@ -28,4 +32,10 @@ abstract class BindingsModule {
 
     @Binds
     abstract fun bindCatalogSource(impl: FirestoreCatalogSource): CatalogSource
+
+    @Binds
+    abstract fun bindCustomerSource(impl: FirestoreCustomerSource): CustomerSource
+
+    @Binds
+    abstract fun bindOrderSource(impl: FirestoreOrderSource): OrderSource
 }

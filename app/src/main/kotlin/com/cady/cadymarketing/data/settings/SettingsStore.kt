@@ -2,11 +2,13 @@ package com.cady.cadymarketing.data.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.cady.cadymarketing.domain.engine.GatewayConfig
+import com.cady.cadymarketing.domain.engine.ReportSources
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -78,6 +80,28 @@ class SettingsStore @Inject constructor(
         dataStore.edit { it[USED_PHRASES] = phrases.joinToString(SEPARATOR) }
     }
 
+    /** Where the reports read orders from (the website's and Kady's own collection and field names). */
+    val reportSources: Flow<ReportSources> = preferences.map {
+        val defaults = ReportSources()
+        ReportSources(
+            siteCollection = it[SITE_COLLECTION] ?: defaults.siteCollection,
+            siteField = it[SITE_FIELD] ?: defaults.siteField,
+            kadyEnabled = it[KADY_ENABLED] ?: defaults.kadyEnabled,
+            kadyCollection = it[KADY_COLLECTION] ?: defaults.kadyCollection,
+            kadyField = it[KADY_FIELD] ?: defaults.kadyField,
+        )
+    }
+
+    suspend fun setReportSources(sources: ReportSources) {
+        dataStore.edit {
+            it[SITE_COLLECTION] = sources.siteCollection.trim()
+            it[SITE_FIELD] = sources.siteField.trim()
+            it[KADY_ENABLED] = sources.kadyEnabled
+            it[KADY_COLLECTION] = sources.kadyCollection.trim()
+            it[KADY_FIELD] = sources.kadyField.trim()
+        }
+    }
+
     private companion object {
         const val SEPARATOR = "\u001F"
         val LAST_EMAIL = stringPreferencesKey("last_email")
@@ -88,5 +112,10 @@ class SettingsStore @Inject constructor(
         val STUDIO_ANGLE = stringPreferencesKey("studio_angle")
         val STUDIO_DESIGN = intPreferencesKey("studio_design")
         val USED_PHRASES = stringPreferencesKey("used_phrases")
+        val SITE_COLLECTION = stringPreferencesKey("report_site_collection")
+        val SITE_FIELD = stringPreferencesKey("report_site_field")
+        val KADY_ENABLED = booleanPreferencesKey("report_kady_enabled")
+        val KADY_COLLECTION = stringPreferencesKey("report_kady_collection")
+        val KADY_FIELD = stringPreferencesKey("report_kady_field")
     }
 }

@@ -19,12 +19,19 @@ object Routes {
     const val TEMPLATES = "templates"
     const val LIBRARY = "library"
     const val AUDIENCE = "audience"
+
+    /** The audience screen, optionally opened to send one post (the segments tab then says which post). */
+    const val AUDIENCE_PATTERN = "audience?contentId={contentId}"
     const val REPORTS = "reports"
     const val SETTINGS = "settings"
 
     // A campaign's own page.
     const val ARG_ID = "id"
     const val CAMPAIGN_DETAIL = "campaign/{id}"
+
+    // The send list of one post to one segment.
+    const val ARG_SEGMENT_ID = "segmentId"
+    const val SEND_LIST_PATTERN = "sendlist/{segmentId}?contentId={contentId}"
 
     // What the Studio can be asked to start on (all optional, see studio()).
     const val ARG_CONTENT_ID = "contentId"
@@ -39,6 +46,14 @@ object Routes {
     val tabRoutes: Set<String> = setOf(HOME, CAMPAIGNS, CALENDAR, MORE)
 
     fun campaign(id: String): String = "campaign/" + encode(id)
+
+    /** The audience screen, optionally opened to send the post [contentId]. */
+    fun audience(contentId: String? = null): String =
+        if (contentId == null) AUDIENCE else AUDIENCE + "?" + ARG_CONTENT_ID + "=" + encode(contentId)
+
+    /** The send list of [segmentId], with the post already chosen when [contentId] is given. */
+    fun sendList(segmentId: String, contentId: String? = null): String =
+        "sendlist/" + encode(segmentId) + if (contentId == null) "" else "?" + ARG_CONTENT_ID + "=" + encode(contentId)
 
     /**
      * The Studio, optionally started on something: a saved post to edit, a campaign to link, a day to schedule for,

@@ -58,6 +58,7 @@ import com.cady.cadymarketing.domain.model.SavedContent
 fun LibraryScreen(
     onBack: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onSendToAudience: (String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -143,6 +144,7 @@ fun LibraryScreen(
                                 Clipboard.copy(context, "نص المنشور", post.text)
                             },
                             onDuplicate = { viewModel.duplicate(post.id) },
+                            onSend = { onSendToAudience(post.id) },
                             onMove = { target -> viewModel.move(post.id, target) },
                             onDelete = { pendingDelete = post },
                         )
@@ -172,6 +174,7 @@ private fun PostCard(
     onOpen: () -> Unit,
     onCopy: () -> Unit,
     onDuplicate: () -> Unit,
+    onSend: () -> Unit,
     onMove: (ContentStatus) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -216,6 +219,15 @@ private fun PostCard(
                                 onDuplicate()
                             },
                         )
+                        if (post.status == ContentStatus.APPROVED || post.status == ContentStatus.PUBLISHED) {
+                            DropdownMenuItem(
+                                text = { Text("إرسال لقائمة عملاء") },
+                                onClick = {
+                                    menuOpen = false
+                                    onSend()
+                                },
+                            )
+                        }
                         HorizontalDivider()
                         LibraryRules.moves(post.status).forEach { move ->
                             DropdownMenuItem(

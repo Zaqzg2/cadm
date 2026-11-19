@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import com.cady.cadymarketing.core.navigation.BottomTab
 import com.cady.cadymarketing.core.navigation.Routes
 import com.cady.cadymarketing.feature.audience.AudienceScreen
+import com.cady.cadymarketing.feature.audience.SendListScreen
 import com.cady.cadymarketing.feature.calendar.CalendarScreen
 import com.cady.cadymarketing.feature.campaigns.CampaignDetailScreen
 import com.cady.cadymarketing.feature.campaigns.CampaignsScreen
@@ -133,14 +134,40 @@ fun MainShell(
                 LibraryScreen(
                     onBack = goBack,
                     onOpenPost = { id -> navController.navigate(Routes.studio(contentId = id)) },
+                    onSendToAudience = { id -> navController.navigate(Routes.audience(contentId = id)) },
                 )
             }
-            composable(Routes.AUDIENCE) { AudienceScreen(onBack = goBack) }
+            composable(Routes.AUDIENCE_PATTERN, arguments = optionalContentArgument) {
+                AudienceScreen(
+                    onBack = goBack,
+                    onSend = { segmentId, contentId -> navController.navigate(Routes.sendList(segmentId, contentId)) },
+                )
+            }
+            composable(Routes.SEND_LIST_PATTERN, arguments = sendListArguments) { SendListScreen(onBack = goBack) }
             composable(Routes.REPORTS) { ReportsScreen(onBack = goBack) }
             composable(Routes.SETTINGS) { SettingsScreen(onBack = goBack) }
         }
     }
 }
+
+/** The post the audience screen was opened to send (optional); see [Routes.audience]. */
+private val optionalContentArgument = listOf(
+    navArgument(Routes.ARG_CONTENT_ID) {
+        type = NavType.StringType
+        nullable = true
+        defaultValue = null
+    },
+)
+
+/** The segment of a send list (required) and its post (optional); see [Routes.sendList]. */
+private val sendListArguments = listOf(
+    navArgument(Routes.ARG_SEGMENT_ID) { type = NavType.StringType },
+    navArgument(Routes.ARG_CONTENT_ID) {
+        type = NavType.StringType
+        nullable = true
+        defaultValue = null
+    },
+)
 
 /** What the Studio may be asked to start on; see [Routes.studio]. All of them are optional. */
 private val studioArguments = listOf(
