@@ -66,17 +66,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
-import androidx.compose.ui.draw.clip
-import com.cady.cadymarketing.core.theme.CadyStyle
-import com.cady.cadymarketing.core.theme.cardLook
-import com.cady.cadymarketing.core.theme.hardShadow
 
 /**
  * الفريق والإعدادات. One scrolling page of cards, each for one thing: the account and its role, the sync, the notifications,
@@ -136,7 +125,6 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { AccountCard(state, onRecheck = viewModel::recheckRole, onDetails = { showDiagnostics = true }) }
-            item { StyleCard(selected = state.uiStyle, onSelect = viewModel::setUiStyle) }
             item { SyncCard(state, onSync = viewModel::syncNow, onAutoSync = viewModel::setAutoSync) }
             item {
                 NotificationsCard(
@@ -496,69 +484,6 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
         }
         Spacer(Modifier.width(8.dp))
         Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun StyleCard(selected: CadyStyle, onSelect: (CadyStyle) -> Unit) {
-    SectionCard(title = "المظهر") {
-        Text(
-            text = "شكل البطاقات في كل الشاشات. يُحفظ على هذا الجهاز.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CadyStyle.entries.chunked(2).forEach { pair ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pair.forEach { style ->
-                        StyleOption(
-                            style = style,
-                            selected = style == selected,
-                            modifier = Modifier.weight(1f),
-                            onClick = { onSelect(style) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** One style: a small card drawn in that style, its name and a line about it. */
-@Composable
-private fun StyleOption(style: CadyStyle, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val look = cardLook(style)
-    val tile = RoundedCornerShape(16.dp)
-    Column(
-        modifier = modifier
-            .clip(tile)
-            .border(if (selected) 2.dp else 1.dp, if (selected) scheme.primary else scheme.outlineVariant, tile)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(modifier = Modifier.fillMaxWidth().padding(end = 5.dp, bottom = 5.dp)) {
-            val shadow = if (look.shadow > 0.dp) Modifier.hardShadow(look.shadowColor, 4.dp, look.radius) else Modifier
-            Surface(
-                modifier = Modifier.fillMaxWidth().height(48.dp).then(shadow),
-                shape = look.shape,
-                color = look.container,
-                border = look.border,
-            ) {
-                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.width(38.dp).height(6.dp).background(scheme.onSurface, CircleShape))
-                    Box(Modifier.width(62.dp).height(6.dp).background(scheme.outline, CircleShape))
-                }
-            }
-        }
-        Text(
-            text = style.label + if (selected) " ✓" else "",
-            style = MaterialTheme.typography.titleSmall,
-            color = if (selected) scheme.primary else scheme.onSurface,
-        )
-        Text(style.note, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
     }
 }
 

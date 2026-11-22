@@ -1,6 +1,7 @@
 package com.cady.cadymarketing.core.components
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,9 +40,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.cady.cadymarketing.core.theme.cadyStyle
-import com.cady.cadymarketing.core.theme.cardLook
-import com.cady.cadymarketing.core.theme.hardShadow
 
 /** A picture kept in the app's own storage, loaded off the main thread. Shows [fallback] until it is there (or when there is none). */
 @Composable
@@ -79,20 +77,19 @@ fun LocalPicture(
     }
 }
 
-/** The card every list item and section uses. Its look follows the style chosen in Settings (see CadyStyle). */
+/** The white card with a thin border that every list item in the app uses. */
 @Composable
 fun CadyCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    val look = cardLook(MaterialTheme.cadyStyle)
-    val colors = CardDefaults.cardColors(containerColor = look.container)
-    val styled = if (look.shadow > 0.dp) modifier.hardShadow(look.shadowColor, look.shadow, look.radius) else modifier
+    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
+    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     if (onClick != null) {
-        Card(onClick = onClick, modifier = styled, shape = look.shape, colors = colors, border = look.border) { content() }
+        Card(onClick = onClick, modifier = modifier, colors = colors, border = border) { content() }
     } else {
-        Card(modifier = styled, shape = look.shape, colors = colors, border = look.border) { content() }
+        Card(modifier = modifier, colors = colors, border = border) { content() }
     }
 }
 

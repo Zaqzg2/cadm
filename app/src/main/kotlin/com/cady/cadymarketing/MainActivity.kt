@@ -27,8 +27,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val brandColor by viewModel.brandColor.collectAsStateWithLifecycle()
-            val uiStyle by viewModel.uiStyle.collectAsStateWithLifecycle()
-            CadyMarketingTheme(brandColor = brandColor, style = uiStyle) {
+            CadyMarketingTheme(brandColor = brandColor) {
                 AppRoot(
                     openContentId = openContentId,
                     onOpenContentHandled = { openContentId = null },

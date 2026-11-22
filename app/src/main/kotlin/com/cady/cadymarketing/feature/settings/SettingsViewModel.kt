@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.cady.cadymarketing.core.theme.CadyStyle
 
 /** A backup the person picked, read and checked, waiting for her to confirm the restore. */
 data class RestorePreview(val file: BackupFile, val skipped: Int)
@@ -45,7 +44,6 @@ data class SettingsUiState(
     val diagnostics: String = "",
     val sync: SyncUiState = SyncUiState(),
     val autoSync: Boolean = true,
-    val uiStyle: CadyStyle = CadyStyle.DEFAULT,
     val remindersOn: Boolean = true,
     val reviewCheckOn: Boolean = true,
     val notificationsAllowed: Boolean = false,
@@ -91,7 +89,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { roles.diagnostics.collect { text -> _state.update { it.copy(diagnostics = text) } } }
         viewModelScope.launch { syncManager.state.collect { sync -> _state.update { it.copy(sync = sync) } } }
         viewModelScope.launch { settings.autoSync.collect { on -> _state.update { it.copy(autoSync = on) } } }
-        viewModelScope.launch { settings.uiStyle.collect { code -> _state.update { it.copy(uiStyle = CadyStyle.fromCode(code)) } } }
         viewModelScope.launch { settings.remindersOn.collect { on -> _state.update { it.copy(remindersOn = on) } } }
         viewModelScope.launch { settings.reviewCheckOn.collect { on -> _state.update { it.copy(reviewCheckOn = on) } } }
         viewModelScope.launch { settings.gatewayConfig.collect { config -> _state.update { it.copy(gateway = config) } } }
@@ -136,10 +133,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setAutoSync(on: Boolean) {
         viewModelScope.launch { settings.setAutoSync(on) }
-    }
-
-    fun setUiStyle(style: CadyStyle) {
-        viewModelScope.launch { settings.setUiStyle(style.code) }
     }
 
     // ------------------------------------------------------------------ notifications

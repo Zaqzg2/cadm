@@ -55,13 +55,6 @@ class SettingsStore @Inject constructor(
         }
     }
 
-    /** The card style the person chose (a CadyStyle code), or null when never chosen. */
-    val uiStyle: Flow<String?> = preferences.map { it[UI_STYLE] }
-
-    suspend fun setUiStyle(code: String) {
-        dataStore.edit { it[UI_STYLE] = code }
-    }
-
     val studioPrefs: Flow<StudioPrefs> = preferences.map {
         StudioPrefs(
             channel = it[STUDIO_CHANNEL],
@@ -167,7 +160,6 @@ class SettingsStore @Inject constructor(
     private companion object {
         const val SEPARATOR = "\u001F"
         val LAST_EMAIL = stringPreferencesKey("last_email")
-        val UI_STYLE = stringPreferencesKey("ui_style")
         val GATEWAY_URL = stringPreferencesKey("gateway_url")
         val GATEWAY_TOKEN = stringPreferencesKey("gateway_token")
         val STUDIO_CHANNEL = stringPreferencesKey("studio_channel")
