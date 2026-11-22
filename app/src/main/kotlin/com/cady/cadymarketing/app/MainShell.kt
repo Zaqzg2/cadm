@@ -26,8 +26,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.cady.cadymarketing.core.components.ManagerOnlyScreen
 import com.cady.cadymarketing.core.navigation.BottomTab
 import com.cady.cadymarketing.core.navigation.Routes
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.feature.audience.AudienceScreen
 import com.cady.cadymarketing.feature.audience.SendListScreen
 import com.cady.cadymarketing.feature.calendar.CalendarScreen
@@ -39,7 +42,10 @@ import com.cady.cadymarketing.feature.library.LibraryScreen
 import com.cady.cadymarketing.feature.more.MoreScreen
 import com.cady.cadymarketing.feature.products.ProductsScreen
 import com.cady.cadymarketing.feature.reports.ReportsScreen
+import com.cady.cadymarketing.feature.inventory.InventoryLinksScreen
+import com.cady.cadymarketing.feature.settings.LogScreen
 import com.cady.cadymarketing.feature.settings.SettingsScreen
+import com.cady.cadymarketing.feature.settings.TeamScreen
 import com.cady.cadymarketing.feature.studio.StudioScreen
 import com.cady.cadymarketing.feature.templates.TemplatesScreen
 
@@ -51,6 +57,8 @@ import com.cady.cadymarketing.feature.templates.TemplatesScreen
 fun MainShell(
     email: String?,
     onSignOut: () -> Unit,
+    openContentId: String? = null,
+    onOpenContentHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -63,6 +71,14 @@ fun MainShell(
 
     val shell: ShellViewModel = hiltViewModel()
     LaunchedEffect(Unit) { shell.onShellOpened() }
+
+    // A reminder notification asked to open a post: the Studio opens on it (once).
+    LaunchedEffect(openContentId) {
+        if (openContentId != null) {
+            navController.navigate(Routes.studio(contentId = openContentId))
+            onOpenContentHandled()
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -116,6 +132,7 @@ fun MainShell(
             composable(Routes.CALENDAR) {
                 CalendarScreen(
                     onNewPost = { date -> navController.navigate(Routes.studio(date = date)) },
+                    onNewArrivalPost = { productId, date -> navController.navigate(Routes.studio(productId = productId, date = date)) },
                     onOpenPost = { id -> navController.navigate(Routes.studio(contentId = id)) },
                     onOpenCampaign = { id -> navController.navigate(Routes.campaign(id)) },
                 )
@@ -128,8 +145,13 @@ fun MainShell(
                 )
             }
             composable(Routes.PRODUCTS) { ProductsScreen(onBack = goBack) }
-            composable(Routes.IDENTITY) { IdentityScreen(onBack = goBack) }
-            composable(Routes.TEMPLATES) { TemplatesScreen(onBack = goBack) }
+            // The screens that are the manager's: a marketer who gets here (a shared link, an old back stack) sees a clear refusal.
+            composable(Routes.IDENTITY) {
+                if (canUse(Feature.EDIT_IDENTITY)) IdentityScreen(onBack = goBack) else ManagerOnlyScreen("الهوية", goBack)
+            }
+            composable(Routes.TEMPLATES) {
+                if (canUse(Feature.EDIT_TEMPLATES)) TemplatesScreen(onBack = goBack) else ManagerOnlyScreen("القوالب والمفردات", goBack)
+            }
             composable(Routes.LIBRARY) {
                 LibraryScreen(
                     onBack = goBack,
@@ -138,14 +160,36 @@ fun MainShell(
                 )
             }
             composable(Routes.AUDIENCE_PATTERN, arguments = optionalContentArgument) {
-                AudienceScreen(
+                if (canUse(Feature.AUDIENCE)) {
+                    AudienceScreen(
+                        onBack = goBack,
+                        onSend = { segmentId, contentId -> navController.navigate(Routes.sendList(segmentId, contentId)) },
+                    )
+                } else {
+                    ManagerOnlyScreen("الجمهور", goBack)
+                }
+            }
+            composable(Routes.SEND_LIST_PATTERN, arguments = sendListArguments) {
+                if (canUse(Feature.AUDIENCE)) SendListScreen(onBack = goBack) else ManagerOnlyScreen("قائمة الإرسال", goBack)
+            }
+            composable(Routes.REPORTS) {
+                if (canUse(Feature.REPORTS)) ReportsScreen(onBack = goBack) else ManagerOnlyScreen("التقارير", goBack)
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
                     onBack = goBack,
-                    onSend = { segmentId, contentId -> navController.navigate(Routes.sendList(segmentId, contentId)) },
+                    onTeam = { navController.navigate(Routes.TEAM) },
+                    onLog = { navController.navigate(Routes.LOG) },
+                    onInventoryLinks = { navController.navigate(Routes.INVENTORY_LINKS) },
                 )
             }
-            composable(Routes.SEND_LIST_PATTERN, arguments = sendListArguments) { SendListScreen(onBack = goBack) }
-            composable(Routes.REPORTS) { ReportsScreen(onBack = goBack) }
-            composable(Routes.SETTINGS) { SettingsScreen(onBack = goBack) }
+            composable(Routes.INVENTORY_LINKS) {
+                if (canUse(Feature.MANAGE_INVENTORY)) InventoryLinksScreen(onBack = goBack) else ManagerOnlyScreen("ربط الأصناف", goBack)
+            }
+            composable(Routes.TEAM) {
+                if (canUse(Feature.MANAGE_TEAM)) TeamScreen(onBack = goBack) else ManagerOnlyScreen("فريق التسويق", goBack)
+            }
+            composable(Routes.LOG) { LogScreen(onBack = goBack) }
         }
     }
 }

@@ -8,10 +8,13 @@ import com.cady.cadymarketing.data.local.CadyMarketingDatabase
 import com.cady.cadymarketing.data.local.CatalogDao
 import com.cady.cadymarketing.data.local.CatalogOfferEntity
 import com.cady.cadymarketing.data.local.CatalogProductEntity
+import com.cady.cadymarketing.data.local.DocDao
+import com.cady.cadymarketing.data.local.DocEntity
 import com.cady.cadymarketing.data.local.ProductExtraEntity
 import com.cady.cadymarketing.data.local.SyncMetaDao
 import com.cady.cadymarketing.data.local.SyncMetaEntity
 import com.cady.cadymarketing.data.product.SampleCatalog
+import com.cady.cadymarketing.domain.engine.CatalogMirror
 import com.cady.cadymarketing.domain.engine.DateUtil
 import com.cady.cadymarketing.domain.engine.KadyMapper
 import com.cady.cadymarketing.domain.engine.KadyOffer
@@ -53,6 +56,7 @@ class CatalogRepository @Inject constructor(
     private val syncMeta: SyncMetaDao,
     private val source: CatalogSource,
     private val auth: AuthRepository,
+    private val docs: DocDao,
 ) {
     val isPreview: Boolean get() = !auth.isConfigured
 
@@ -117,6 +121,7 @@ class CatalogRepository @Inject constructor(
             dao.upsertOffers(offers.map { it.toEntity() })
         }
         syncMeta.upsert(SyncMetaEntity(SYNC_KEY, now))
+        publishMirror(products, offers, now)
         return RefreshReport(
             products = products.size,
             offers = offers.size,
@@ -125,6 +130,37 @@ class CatalogRepository @Inject constructor(
             sampleOffer = raw.offers.firstOrNull()?.let { describe(it) } ?: "لا توجد عروض في كادي",
             at = now,
         )
+    }
+
+    /**
+     * The manager keeps a copy of the catalogue as one stored document (it syncs like the brand does), because a marketer's
+     * account may not read Kady's own collections. The document is only rewritten when the catalogue really changed.
+     */
+    private suspend fun publishMirror(products: List<KadyProduct>, offers: List<KadyOffer>, now: Long) {
+        val json = CatalogMirror.encode(products, offers)
+        if (docs.get(CatalogMirror.DOC_KEY)?.json == json) return
+        docs.upsert(DocEntity(CatalogMirror.DOC_KEY, json, now, null))
+    }
+
+    /**
+     * A marketer takes the catalogue the manager published, when it is newer than the one already on this device.
+     * Returns true when the device's catalogue was replaced.
+     */
+    suspend fun restoreFromMirror(): Boolean {
+        val doc = docs.get(CatalogMirror.DOC_KEY) ?: return false
+        val taken = syncMeta.get(MIRROR_KEY)?.lastSyncAt ?: 0L
+        if (doc.updatedAt <= taken) return false
+        val (products, offers) = CatalogMirror.decode(doc.json) ?: return false
+        val now = System.currentTimeMillis()
+        database.withTransaction {
+            dao.clearProducts()
+            dao.clearOffers()
+            dao.upsertProducts(products.map { CatalogProductEntity(it.id, it.name, it.unit, it.price, it.active, now) })
+            dao.upsertOffers(offers.map { it.toEntity() })
+        }
+        syncMeta.upsert(SyncMetaEntity(SYNC_KEY, now))
+        syncMeta.upsert(SyncMetaEntity(MIRROR_KEY, doc.updatedAt))
+        return true
     }
 
     /** Refreshes quietly when the copy is older than [maxAgeMs]. Returns true only when a refresh happened and worked. */
@@ -175,6 +211,7 @@ class CatalogRepository @Inject constructor(
 
     companion object {
         const val SYNC_KEY = "catalog:pull"
+        private const val MIRROR_KEY = "catalog:mirror"
         private const val MAX_SAMPLE = 600
     }
 }

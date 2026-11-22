@@ -17,6 +17,10 @@ data class SavedContent(
     val angle: String?,
     val createdAt: Long,
     val updatedAt: Long,
+    /** CNT-0001, given by the first sync (null until then). */
+    val number: String? = null,
+    /** What the manager wrote when sending the post back for changes; shown while the post is in that state. */
+    val note: String? = null,
 ) {
     /** The day the post is scheduled for ("yyyy-MM-dd"), or null when it has no schedule. */
     val scheduledDate: String?

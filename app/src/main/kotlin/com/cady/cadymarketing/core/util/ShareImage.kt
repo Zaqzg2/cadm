@@ -8,10 +8,10 @@ import android.net.Uri
 
 /** Opens the system share sheet with a picture (and optionally a text) that this app wrote to its share folder. */
 object ShareImage {
-    /** Returns false when no app could take it. */
-    fun send(context: Context, uri: Uri, text: String? = null, title: String = "مشاركة"): Boolean {
+    /** Returns false when no app could take it. [mime] is the file's type (a picture by default; the backup is JSON). */
+    fun send(context: Context, uri: Uri, text: String? = null, title: String = "مشاركة", mime: String = "image/png"): Boolean {
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
+            type = mime
             putExtra(Intent.EXTRA_STREAM, uri)
             if (text != null) putExtra(Intent.EXTRA_TEXT, text)
             clipData = ClipData.newRawUri("", uri)

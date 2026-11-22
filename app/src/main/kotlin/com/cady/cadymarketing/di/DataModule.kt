@@ -13,6 +13,7 @@ import com.cady.cadymarketing.data.local.ContentDao
 import com.cady.cadymarketing.data.local.DocDao
 import com.cady.cadymarketing.data.local.OccasionDao
 import com.cady.cadymarketing.data.local.ReportDao
+import com.cady.cadymarketing.data.local.SyncDao
 import com.cady.cadymarketing.data.local.SyncMetaDao
 import dagger.Module
 import dagger.Provides
@@ -41,6 +42,7 @@ object DataModule {
                 CadyMarketingDatabase.MIGRATION_2_3,
                 CadyMarketingDatabase.MIGRATION_3_4,
                 CadyMarketingDatabase.MIGRATION_4_5,
+                CadyMarketingDatabase.MIGRATION_5_6,
             )
             .build()
 
@@ -67,4 +69,7 @@ object DataModule {
 
     @Provides
     fun provideReportDao(database: CadyMarketingDatabase): ReportDao = database.reportDao()
+
+    @Provides
+    fun provideSyncDao(database: CadyMarketingDatabase): SyncDao = database.syncDao()
 }

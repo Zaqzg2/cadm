@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,7 +50,12 @@ import com.cady.cadymarketing.core.components.ConfirmDialog
 import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.components.StatusPill
+import com.cady.cadymarketing.core.role.LocalRole
 import com.cady.cadymarketing.core.util.Clipboard
+import com.cady.cadymarketing.domain.engine.ContentFlow
+import com.cady.cadymarketing.domain.engine.Feature
+import com.cady.cadymarketing.domain.engine.Permissions
+import com.cady.cadymarketing.domain.model.MktRole
 import com.cady.cadymarketing.domain.engine.LibraryRules
 import com.cady.cadymarketing.domain.model.ContentStatus
 import com.cady.cadymarketing.domain.model.SavedContent
@@ -66,6 +73,8 @@ fun LibraryScreen(
     val snackbar = remember { SnackbarHostState() }
     var query by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<SavedContent?>(null) }
+    var pendingReturn by remember { mutableStateOf<SavedContent?>(null) }
+    val role = LocalRole.current
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { text ->
@@ -139,7 +148,9 @@ fun LibraryScreen(
                     items(visible, key = { it.id }) { post ->
                         PostCard(
                             post = post,
+                            role = role,
                             onOpen = { onOpenPost(post.id) },
+                            onReturn = { pendingReturn = post },
                             onCopy = {
                                 Clipboard.copy(context, "نص المنشور", post.text)
                             },
@@ -154,6 +165,16 @@ fun LibraryScreen(
         }
     }
 
+    pendingReturn?.let { post ->
+        ReturnDialog(
+            productName = post.productName,
+            onConfirm = { note ->
+                viewModel.returnPost(post.id, note)
+                pendingReturn = null
+            },
+            onDismiss = { pendingReturn = null },
+        )
+    }
     pendingDelete?.let { post ->
         ConfirmDialog(
             title = "حذف المنشور",
@@ -168,10 +189,32 @@ fun LibraryScreen(
     }
 }
 
+/** The manager's note to the marketer when a post goes back to her. */
+@Composable
+private fun ReturnDialog(productName: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("إرجاع «$productName» للتعديل") },
+        text = {
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("ما المطلوب تعديله؟") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(note) }) { Text("إرجاع") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
+    )
+}
+
 @Composable
 private fun PostCard(
     post: SavedContent,
+    role: MktRole,
     onOpen: () -> Unit,
+    onReturn: () -> Unit,
     onCopy: () -> Unit,
     onDuplicate: () -> Unit,
     onSend: () -> Unit,
@@ -199,7 +242,15 @@ private fun PostCard(
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("فتح للتعديل") },
+                            text = {
+                                Text(
+                                    when {
+                                        !ContentFlow.canEdit(role, post.status) -> "فتح للعرض"
+                                        role == MktRole.MANAGER && post.status == ContentStatus.PENDING -> "مراجعة واعتماد"
+                                        else -> "فتح للتعديل"
+                                    },
+                                )
+                            },
                             onClick = {
                                 menuOpen = false
                                 onOpen()
@@ -219,7 +270,9 @@ private fun PostCard(
                                 onDuplicate()
                             },
                         )
-                        if (post.status == ContentStatus.APPROVED || post.status == ContentStatus.PUBLISHED) {
+                        if (Permissions.can(role, Feature.AUDIENCE) &&
+                            (post.status == ContentStatus.APPROVED || post.status == ContentStatus.PUBLISHED)
+                        ) {
                             DropdownMenuItem(
                                 text = { Text("إرسال لقائمة عملاء") },
                                 onClick = {
@@ -229,7 +282,16 @@ private fun PostCard(
                             )
                         }
                         HorizontalDivider()
-                        LibraryRules.moves(post.status).forEach { move ->
+                        if (ContentFlow.canReturn(role, post.status)) {
+                            DropdownMenuItem(
+                                text = { Text("إرجاع للمسوّق مع ملاحظة") },
+                                onClick = {
+                                    menuOpen = false
+                                    onReturn()
+                                },
+                            )
+                        }
+                        LibraryRules.moves(post.status, role).forEach { move ->
                             DropdownMenuItem(
                                 text = { Text(move.label) },
                                 onClick = {
@@ -238,14 +300,16 @@ private fun PostCard(
                                 },
                             )
                         }
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("حذف") },
-                            onClick = {
-                                menuOpen = false
-                                onDelete()
-                            },
-                        )
+                        if (ContentFlow.canDelete(role, post.status)) {
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("حذف") },
+                                onClick = {
+                                    menuOpen = false
+                                    onDelete()
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -256,7 +320,16 @@ private fun PostCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(end = 10.dp),
             )
+            if (post.status == ContentStatus.RETURNED && !post.note.isNullOrBlank()) {
+                Text(
+                    text = "ملاحظة المدير: " + post.note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(end = 10.dp),
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                post.number?.let { Pill(text = it) }
                 Pill(text = post.channel.label)
                 post.scheduledAt?.let { Pill(text = it.replace('T', ' ')) }
                 post.campaignCode?.let { Pill(text = "حملة $it") }

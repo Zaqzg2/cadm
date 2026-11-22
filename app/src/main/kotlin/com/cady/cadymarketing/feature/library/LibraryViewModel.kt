@@ -59,6 +59,14 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** The manager sends a post that waits for approval back to its author, with what to change. */
+    fun returnPost(id: String, note: String) {
+        viewModelScope.launch {
+            content.returnWithNote(id, note)
+            _messages.tryEmit("أُرجع المنشور إلى المسوّق للتعديل")
+        }
+    }
+
     fun duplicate(id: String) {
         viewModelScope.launch {
             val copy = content.duplicate(id)

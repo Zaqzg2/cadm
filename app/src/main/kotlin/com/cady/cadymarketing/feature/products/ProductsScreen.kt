@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -56,13 +58,18 @@ import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.components.CadyScreen
 import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.components.LabeledValue
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.core.components.LocalPicture
 import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.data.catalog.RefreshReport
 import com.cady.cadymarketing.domain.engine.ArabicText
+import com.cady.cadymarketing.domain.engine.InventoryRules
 import com.cady.cadymarketing.domain.engine.ProductText
 import com.cady.cadymarketing.domain.engine.RelativeTime
 import com.cady.cadymarketing.domain.model.ProductRow
+import com.cady.cadymarketing.domain.model.StockInfo
+import com.cady.cadymarketing.domain.model.StockStatus
 
 /**
  * Kady's catalogue as the marketing app sees it. Prices and offers are read-only (they belong to Kady);
@@ -120,6 +127,20 @@ fun ProductsScreen(onBack: () -> Unit, viewModel: ProductsViewModel = hiltViewMo
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
             )
+            if (state.hasSnapshot) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(StockFilter.entries.toList()) { option ->
+                        FilterChip(
+                            selected = state.stockFilter == option,
+                            onClick = { viewModel.setStockFilter(option) },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
+            }
             if (state.visible.isEmpty()) {
                 EmptyState(
                     icon = Icons.Filled.Inventory2,
@@ -139,7 +160,12 @@ fun ProductsScreen(onBack: () -> Unit, viewModel: ProductsViewModel = hiltViewMo
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(state.visible, key = { it.product.id }) { row ->
-                        ProductItem(row = row, loader = viewModel::loadThumb, onClick = { openId = row.product.id })
+                        ProductItem(
+                            row = row,
+                            stock = state.stock[row.product.id],
+                            loader = viewModel::loadThumb,
+                            onClick = { openId = row.product.id },
+                        )
                     }
                 }
             }
@@ -150,6 +176,7 @@ fun ProductsScreen(onBack: () -> Unit, viewModel: ProductsViewModel = hiltViewMo
     if (open != null) {
         ProductDialog(
             row = open,
+            stock = state.stock[open.product.id],
             loader = viewModel::loadThumb,
             onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             onRemovePicture = { viewModel.removePicture(open.product.id) },
@@ -177,8 +204,36 @@ private fun SyncLine(state: ProductsState) {
     )
 }
 
+/** The stock badge of a product: red when it ran out, amber when low, blue for a surplus, quiet when in stock. */
 @Composable
-private fun ProductItem(row: ProductRow, loader: suspend (String) -> android.graphics.Bitmap?, onClick: () -> Unit) {
+private fun StockPill(info: StockInfo) {
+    val scheme = MaterialTheme.colorScheme
+    val (background, foreground) = when (info.status) {
+        StockStatus.OUT -> scheme.errorContainer to scheme.onErrorContainer
+        StockStatus.LOW -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        StockStatus.OVER -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        StockStatus.OK -> scheme.surfaceVariant to scheme.onSurfaceVariant
+    }
+    Pill(text = "المخزون: " + info.status.label, background = background, foreground = foreground)
+}
+
+/** The stock of a product in words: how many, where its goal stands, and when more arrives. */
+private fun stockText(info: StockInfo): String {
+    val unit = if (info.unit.isBlank()) "" else " ${info.unit}"
+    val lines = ArrayList<String>()
+    lines.add("المخزون: ${info.onHand}$unit (${info.status.label})")
+    info.goal?.let { lines.add(InventoryRules.goalText(it, info.unit)) }
+    info.nextArrival?.let { lines.add("تصل ${it.qty}$unit في ${it.date}") }
+    return lines.joinToString("\n")
+}
+
+@Composable
+private fun ProductItem(
+    row: ProductRow,
+    stock: StockInfo?,
+    loader: suspend (String) -> android.graphics.Bitmap?,
+    onClick: () -> Unit,
+) {
     val product = row.product
     CadyCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
@@ -242,6 +297,7 @@ private fun ProductItem(row: ProductRow, loader: suspend (String) -> android.gra
                         )
                     }
                     if (product.features.isNotEmpty()) Pill(text = "${product.features.size} مزايا")
+                    if (stock != null) StockPill(stock)
                 }
             }
         }
@@ -251,6 +307,7 @@ private fun ProductItem(row: ProductRow, loader: suspend (String) -> android.gra
 @Composable
 private fun ProductDialog(
     row: ProductRow,
+    stock: StockInfo?,
     loader: suspend (String) -> android.graphics.Bitmap?,
     onPick: () -> Unit,
     onRemovePicture: () -> Unit,
@@ -258,6 +315,8 @@ private fun ProductDialog(
     onDismiss: () -> Unit,
 ) {
     val product = row.product
+    // The features are the manager's text; a marketer reads them (they shape the posts she writes).
+    val canEditFeatures = canUse(Feature.EDIT_PRODUCT_FEATURES)
     var features by remember(product.id) { mutableStateOf(ProductText.featuresText(product.features)) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -267,6 +326,9 @@ private fun ProductDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (stock != null) {
+                    Text(stockText(stock), style = MaterialTheme.typography.bodyMedium)
+                }
                 LabeledValue("الوحدة", product.unit.ifBlank { "—" })
                 LabeledValue("السعر في كادي", ArabicText.formatNumber(product.price) + " ريال")
                 if (product.hasOffer) {
@@ -299,25 +361,32 @@ private fun ProductDialog(
                 OutlinedTextField(
                     value = features,
                     onValueChange = { features = it },
+                    readOnly = !canEditFeatures,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("مزايا تسويقية (ميزة في كل سطر)") },
                     minLines = 3,
                     maxLines = 6,
                 )
                 Text(
-                    text = "تُستعمل المزايا في نصوص المنشورات. أي ميزة فيها رقم أو عبارة ممنوعة تُهمل تلقائيًا.",
+                    text = if (canEditFeatures) {
+                        "تُستعمل المزايا في نصوص المنشورات. أي ميزة فيها رقم أو عبارة ممنوعة تُهمل تلقائيًا."
+                    } else {
+                        "المزايا يكتبها المدير وتصلك بالمزامنة. الصورة تربطها على جهازك أنت."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    onSaveFeatures(features)
-                    onDismiss()
-                },
-            ) { Text("حفظ") }
+            if (canEditFeatures) {
+                TextButton(
+                    onClick = {
+                        onSaveFeatures(features)
+                        onDismiss()
+                    },
+                ) { Text("حفظ") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } },
     )

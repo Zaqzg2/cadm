@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.cady.cadymarketing.data.auth.AuthErrors
 import com.cady.cadymarketing.data.auth.AuthRepository
 import com.cady.cadymarketing.data.settings.SettingsStore
+import com.cady.cadymarketing.domain.engine.TeamRules
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,11 +54,13 @@ class LoginViewModel @Inject constructor(
     fun signIn() {
         val current = _uiState.value
         if (current.isLoading) return
-        val email = current.email.trim()
-        if (email.isEmpty() || current.password.isEmpty()) {
-            _uiState.update { it.copy(error = "أدخل البريد الإلكتروني وكلمة المرور.") }
+        val typed = current.email.trim()
+        if (typed.isEmpty() || current.password.isEmpty()) {
+            _uiState.update { it.copy(error = "أدخل البريد الإلكتروني أو اسم المستخدم وكلمة المرور.") }
             return
         }
+        // A bare user name (how a marketer's account is made) gets the same address domain Kady gives its accounts.
+        val email = TeamRules.emailFor(typed)
         _uiState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             authRepository.signIn(email, current.password)

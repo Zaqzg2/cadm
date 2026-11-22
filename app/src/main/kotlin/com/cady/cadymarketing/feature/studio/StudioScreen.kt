@@ -49,7 +49,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +58,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -83,12 +81,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cady.cadymarketing.core.role.LocalRole
 import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.theme.cady
 import com.cady.cadymarketing.core.util.Clipboard
+import com.cady.cadymarketing.domain.engine.ContentFlow
+import com.cady.cadymarketing.domain.engine.NoteLevel
+import com.cady.cadymarketing.domain.engine.StockNote
 import com.cady.cadymarketing.domain.engine.ClaimChecker
 import com.cady.cadymarketing.domain.model.CheckResult
 import com.cady.cadymarketing.domain.model.Issue
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import com.cady.cadymarketing.core.poster.PosterDesigns
 import kotlinx.coroutines.launch
 
 /**
@@ -195,17 +209,22 @@ fun StudioScreen(
             StudioTopBar(
                 productName = state.product?.name ?: "الاستوديو",
                 hasText = state.currentText.isNotBlank(),
-                canApprove = state.canApprove,
                 onClose = requestClose,
                 onShare = viewModel::share,
                 onSaveImage = viewModel::saveImage,
                 onCopy = viewModel::copyText,
                 onHistory = { showSaved = true },
                 onSave = { viewModel.save(false) },
+            )
+        },
+        bottomBar = {
+            StudioDock(
+                state = state,
+                submitLabel = ContentFlow.submitLabel(LocalRole.current),
+                onTool = viewModel::toggleTool,
                 onApprove = { viewModel.save(true) },
             )
         },
-        bottomBar = { StudioToolBar(openTool = state.openTool, onTool = viewModel::toggleTool) },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -225,8 +244,13 @@ fun StudioScreen(
                     onAction = onOpenProducts,
                 )
             } else {
-                PreviewRow(state, compact = keyboardOpen)
-                if (!keyboardOpen) FormulaRow(state, viewModel::selectFormula)
+                if (!keyboardOpen) state.stockNote?.let { StockBanner(it) }
+                if (keyboardOpen) {
+                    PreviewRow(state, compact = true)
+                } else {
+                    PreviewHero(state, small = state.openTool != null)
+                    FormulaRow(state, viewModel::selectFormula)
+                }
                 HorizontalDivider()
                 Box(modifier = Modifier.weight(1f)) {
                     ToolPanel(state, actions)
@@ -305,14 +329,12 @@ fun StudioScreen(
 private fun StudioTopBar(
     productName: String,
     hasText: Boolean,
-    canApprove: Boolean,
     onClose: () -> Unit,
     onShare: (ShareTarget) -> Unit,
     onSaveImage: () -> Unit,
     onCopy: () -> Unit,
     onHistory: () -> Unit,
     onSave: () -> Unit,
-    onApprove: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.surface) {
@@ -384,17 +406,33 @@ private fun StudioTopBar(
                     )
                 }
             }
-            TextButton(onClick = onSave, enabled = hasText) { Text("حفظ") }
-            Button(
-                onClick = onApprove,
-                enabled = canApprove,
-                contentPadding = PaddingValues(horizontal = 14.dp),
-            ) { Text("اعتماد") }
+            OutlinedButton(
+                onClick = onSave,
+                enabled = hasText,
+                contentPadding = PaddingValues(horizontal = 16.dp),
+            ) { Text("حفظ") }
+            Spacer(Modifier.width(8.dp))
         }
     }
 }
 
 // ---------------------------------------------------------------------- preview and text
+
+/** One line above the preview about the product's stock: a warning when it ran out or is low, good news for a surplus. */
+@Composable
+private fun StockBanner(note: StockNote) {
+    val warning = note.level == NoteLevel.WARNING
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text = (if (warning) "⚠ " else "ℹ ") + note.text,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (warning) scheme.onErrorContainer else scheme.onSecondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (warning) scheme.errorContainer else scheme.secondaryContainer)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
 
 @Composable
 private fun PreviewRow(state: StudioState, compact: Boolean) {
@@ -409,6 +447,63 @@ private fun PreviewRow(state: StudioState, compact: Boolean) {
     ) {
         PosterBox(bitmap = state.preview, aspect = state.channel.aspect, modifier = Modifier.width(posterWidth))
         TextSummary(state = state, modifier = Modifier.weight(1f).height(posterHeight))
+    }
+}
+
+/**
+ * The wide preview: the poster is the hero on a soft stage, the check result and the channel ride on it as pills,
+ * the live text sits right under it. [small] is used while a tool panel is open, so the panel keeps its room.
+ */
+@Composable
+private fun PreviewHero(state: StudioState, small: Boolean) {
+    val configuration = LocalConfiguration.current
+    val posterHeight = configuration.screenHeightDp.dp * (if (small) 0.17f else 0.26f)
+    val posterWidth = minOf(posterHeight * state.channel.aspect, configuration.screenWidthDp.dp * 0.6f)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer)
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusPill { CheckBadge(check = state.check, hasText = state.currentText.isNotBlank()) }
+                StatusPill {
+                    Text(
+                        text = state.channel.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            PosterBox(bitmap = state.preview, aspect = state.channel.aspect, modifier = Modifier.width(posterWidth))
+        }
+        TextSummary(
+            state = state,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (small) 56.dp else 84.dp),
+            showBadge = false,
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(content: @Composable () -> Unit) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)) { content() }
     }
 }
 
@@ -436,7 +531,7 @@ private fun PosterBox(bitmap: Bitmap?, aspect: Float, modifier: Modifier) {
 }
 
 @Composable
-private fun TextSummary(state: StudioState, modifier: Modifier) {
+private fun TextSummary(state: StudioState, modifier: Modifier, showBadge: Boolean = true) {
     val scheme = MaterialTheme.colorScheme
     Surface(
         modifier = modifier,
@@ -445,8 +540,10 @@ private fun TextSummary(state: StudioState, modifier: Modifier) {
         border = BorderStroke(1.dp, scheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
-            CheckBadge(check = state.check, hasText = state.currentText.isNotBlank())
-            Spacer(Modifier.height(6.dp))
+            if (showBadge) {
+                CheckBadge(check = state.check, hasText = state.currentText.isNotBlank())
+                Spacer(Modifier.height(6.dp))
+            }
             Text(
                 text = rememberHighlighted(state.currentText, state.check.errors),
                 style = MaterialTheme.typography.bodyMedium,
@@ -498,17 +595,42 @@ private fun rememberHighlighted(text: String, errors: List<Issue>): AnnotatedStr
 @Composable
 private fun FormulaRow(state: StudioState, onSelect: (Int) -> Unit) {
     if (state.formulas.isEmpty()) return
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         itemsIndexed(state.formulas) { index, formula ->
-            FilterChip(
-                selected = index == state.formulaIndex,
-                onClick = { onSelect(index) },
-                label = { Text(formula.name) },
-            )
+            val selected = index == state.formulaIndex
+            Surface(
+                modifier = Modifier
+                    .width(168.dp)
+                    .clip(shape)
+                    .clickable { onSelect(index) },
+                shape = shape,
+                color = scheme.surfaceContainerLowest,
+                border = BorderStroke(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) scheme.primary else scheme.outlineVariant,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text(
+                        text = formula.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) scheme.primary else scheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = formula.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -528,11 +650,10 @@ private val toolDefs = listOf(
 
 @Composable
 private fun StudioToolBar(openTool: StudioTool?, onTool: (StudioTool) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
                 .padding(vertical = 4.dp),
         ) {
             toolDefs.forEach { def ->
@@ -561,6 +682,138 @@ private fun StudioToolBar(openTool: StudioTool?, onTool: (StudioTool) -> Unit) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------- dock
+
+/**
+ * The bottom dock: the six tools and the one main action. With no tool open the tools are a grid that shows what each
+ * one currently holds (empty ones are dashed); with a tool open they shrink to the slim bar so its panel keeps its room.
+ */
+@Composable
+private fun StudioDock(
+    state: StudioState,
+    submitLabel: String,
+    onTool: (StudioTool) -> Unit,
+    onApprove: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (state.openTool == null) {
+                StudioToolGrid(state, onTool)
+            } else {
+                StudioToolBar(openTool = state.openTool, onTool = onTool)
+            }
+            Button(
+                onClick = onApprove,
+                enabled = state.canApprove,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+            ) { Text(submitLabel, style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+}
+
+@Composable
+private fun StudioToolGrid(state: StudioState, onTool: (StudioTool) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val tones = listOf(
+        scheme.tertiaryContainer to scheme.onTertiaryContainer,
+        scheme.secondaryContainer to scheme.onSecondaryContainer,
+        scheme.primaryContainer to scheme.onPrimaryContainer,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        toolDefs.chunked(3).forEachIndexed { rowIndex, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEachIndexed { column, def ->
+                    val (value, filled) = when (def.tool) {
+                        StudioTool.PRODUCT -> (state.product?.name ?: "اختر صنفًا") to (state.product != null)
+                        StudioTool.CHANNEL -> state.channel.label to true
+                        StudioTool.TEXT ->
+                            (state.formulas.getOrNull(state.formulaIndex)?.name ?: "اكتب نصًا") to
+                                state.currentText.isNotBlank()
+                        StudioTool.DESIGN -> PosterDesigns.byId(state.designId).label to true
+                        StudioTool.PICTURE ->
+                            (if (state.effectivePicture != null) "مضافة" else "أضف صورة") to
+                                (state.effectivePicture != null)
+                        StudioTool.SCHEDULE ->
+                            (state.scheduledAt?.let { if (it.length >= 16) it.substring(5).replace('T', ' ') else it }
+                                ?: "غير محدد") to (state.scheduledAt != null)
+                    }
+                    val (container, content) = tones[(rowIndex * 3 + column) % tones.size]
+                    ToolTile(
+                        def = def,
+                        value = value,
+                        filled = filled,
+                        container = container,
+                        content = content,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onTool(def.tool) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolTile(
+    def: ToolDef,
+    value: String,
+    filled: Boolean,
+    container: Color,
+    content: Color,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    val base = modifier.height(52.dp)
+    val styled = if (filled) {
+        base.clip(shape).background(container)
+    } else {
+        base.dashedBorder(scheme.outline, 18.dp).clip(shape)
+    }
+    val tint = if (filled) content else scheme.onSurfaceVariant
+    Row(
+        modifier = styled
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(def.icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(def.label, style = MaterialTheme.typography.labelSmall, color = tint, maxLines = 1)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = tint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** A dashed rounded outline, for tools that are still empty. */
+private fun Modifier.dashedBorder(color: Color, radius: Dp): Modifier = drawBehind {
+    val stroke = 1.5.dp.toPx()
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(stroke / 2, stroke / 2),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(radius.toPx()),
+        style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
+    )
 }
 
 // ---------------------------------------------------------------------- sharing

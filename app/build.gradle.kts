@@ -145,6 +145,9 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    // Reminders for posts that are due, and the periodic check (phase 5).
+    implementation(libs.androidx.work.runtime.ktx)
+
     // QR codes for campaign links, generated on the device.
     implementation(libs.zxing.core)
 

@@ -8,10 +8,12 @@ import com.cady.cadymarketing.core.poster.PosterRenderer
 import com.cady.cadymarketing.data.brand.BrandRepository
 import com.cady.cadymarketing.data.campaign.CampaignRepository
 import com.cady.cadymarketing.data.content.ContentRepository
+import com.cady.cadymarketing.data.inventory.InventoryRepository
 import com.cady.cadymarketing.data.media.ImageExporter
 import com.cady.cadymarketing.data.media.PictureStore
 import com.cady.cadymarketing.data.product.ProductRepository
 import com.cady.cadymarketing.data.settings.SettingsStore
+import com.cady.cadymarketing.data.team.RoleRepository
 import com.cady.cadymarketing.data.settings.StudioPrefs
 import com.cady.cadymarketing.data.vocab.VocabularyRepository
 import com.cady.cadymarketing.domain.engine.CalendarMath
@@ -20,7 +22,9 @@ import com.cady.cadymarketing.domain.engine.CopyGenerator
 import com.cady.cadymarketing.domain.engine.DailyIdeas
 import com.cady.cadymarketing.domain.engine.DateUtil
 import com.cady.cadymarketing.domain.engine.DefaultVocabulary
+import com.cady.cadymarketing.domain.engine.ContentFlow
 import com.cady.cadymarketing.domain.engine.GatewayClient
+import com.cady.cadymarketing.domain.engine.InventoryRules
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.GatewayException
 import com.cady.cadymarketing.domain.engine.GenerationRequest
@@ -71,6 +75,8 @@ class StudioViewModel @Inject constructor(
     private val renderer: PosterRenderer,
     private val vocabularyRepository: VocabularyRepository,
     private val campaignRepository: CampaignRepository,
+    private val roles: RoleRepository,
+    private val inventory: InventoryRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -121,6 +127,11 @@ class StudioViewModel @Inject constructor(
             launch { campaignRepository.observeAll().collect { list -> onCampaigns(list) } }
             launch { contentRepository.observeRecent().collect { list -> _state.update { it.copy(saved = list) } } }
             launch { settings.gatewayConfig.collect { config -> _state.update { it.copy(gateway = config) } } }
+            launch {
+                inventory.observeStock().collect { data ->
+                    _state.update { it.copy(stock = data.byProduct, stockAgeDays = data.ageDays) }
+                }
+            }
         }
     }
 
@@ -179,9 +190,11 @@ class StudioViewModel @Inject constructor(
     }
 
     /** Opens on the idea of the day, written as a post (the same pick the home screen shows). */
-    private fun applyIdeaOfDay() {
+    private suspend fun applyIdeaOfDay() {
         val today = DateUtil.today()
-        val pick = DailyIdeas.pick(today, _state.value.products, vocab.ideas, _state.value.brand) ?: return
+        // The same lean toward products in surplus that the home screen applies, so both show the same idea.
+        val preferred = InventoryRules.preferredForIdeas(inventory.observeStock().first().byProduct)
+        val pick = DailyIdeas.pick(today, _state.value.products, vocab.ideas, _state.value.brand, preferred) ?: return
         selectProduct(pick.product.id)
         val s = _state.value
         val product = s.product ?: return
@@ -489,6 +502,11 @@ class StudioViewModel @Inject constructor(
             val now = System.currentTimeMillis()
             val id = s.editingId ?: UUID.randomUUID().toString()
             val existing = s.editingId?.let { contentRepository.get(it) }
+            val role = roles.currentRole()
+            // A marketer only edits what is still hers (a draft, a post waiting for approval, a post sent back to her).
+            if (existing != null && !ContentFlow.canEdit(role, existing.status)) {
+                return@launch note("هذا المنشور " + existing.status.label + ": للمدير وحده تعديله. انسخه كمسودة من المكتبة إن أردت نسخة جديدة.")
+            }
             contentRepository.save(
                 SavedContent(
                     id = id,
@@ -496,7 +514,7 @@ class StudioViewModel @Inject constructor(
                     productName = product.name,
                     channel = s.channel,
                     text = s.currentText,
-                    status = if (approve) ContentStatus.APPROVED else ContentStatus.DRAFT,
+                    status = if (approve) ContentFlow.submitStatus(role) else ContentStatus.DRAFT,
                     designId = s.designId,
                     picturePath = s.pictureFile,
                     scheduledAt = s.scheduledAt,
@@ -510,7 +528,7 @@ class StudioViewModel @Inject constructor(
             )
             _state.update { it.copy(editingId = id, dirty = false) }
             textEdited = false
-            note(if (approve) "اعتُمد المحتوى" else "حُفظت المسودة")
+            note(if (approve) ContentFlow.submittedMessage(role) else "حُفظت المسودة")
         }
     }
 

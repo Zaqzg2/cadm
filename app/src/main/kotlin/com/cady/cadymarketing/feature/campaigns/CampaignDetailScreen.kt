@@ -46,17 +46,22 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.components.CadyCard
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.core.components.CadyScreen
 import com.cady.cadymarketing.core.components.ConfirmDialog
 import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.components.LabeledValue
 import com.cady.cadymarketing.core.components.PhasePill
+import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.components.SectionTitle
 import com.cady.cadymarketing.core.components.StatusPill
 import com.cady.cadymarketing.core.util.Clipboard
 import com.cady.cadymarketing.core.util.ShareImage
 import com.cady.cadymarketing.domain.engine.DateUtil
 import com.cady.cadymarketing.domain.engine.TrackingLink
+import com.cady.cadymarketing.domain.engine.CampaignStockRow
+import com.cady.cadymarketing.domain.engine.InventoryRules
 import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.CampaignStatus
 import com.cady.cadymarketing.domain.model.ContentStatus
@@ -98,13 +103,14 @@ fun CampaignDetailScreen(
     }
 
     val campaign = state.campaign
+    val canManage = canUse(Feature.MANAGE_CAMPAIGNS)
     CadyScreen(
         title = campaign?.name ?: "الحملة",
         onBack = onBack,
         withBottomInset = true,
         snackbarHost = { SnackbarHost(snackbar) },
         actions = {
-            if (campaign != null) {
+            if (campaign != null && canManage) {
                 IconButton(onClick = { showEdit = true }) {
                     Icon(Icons.Filled.Edit, contentDescription = "تعديل")
                 }
@@ -155,6 +161,10 @@ fun CampaignDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 item { SummaryCard(campaign, state.posts) }
+                if (state.stockRows.isNotEmpty()) {
+                    item { SectionTitle("توفر أصناف الحملة") }
+                    items(state.stockRows, key = { it.productId }) { row -> StockRowCard(row) }
+                }
                 item { SectionTitle("روابط التتبّع ورمز QR") }
                 items(state.links, key = { it.channel.code }) { link ->
                     LinkRow(
@@ -260,6 +270,48 @@ private fun SummaryCard(campaign: Campaign, posts: List<SavedContent>) {
             LabeledValue("بانتظار الاعتماد", posts.count { it.status == ContentStatus.PENDING }.toString())
             LabeledValue("معتمدة", posts.count { it.status == ContentStatus.APPROVED }.toString())
             LabeledValue("منشورة", posts.count { it.status == ContentStatus.PUBLISHED }.toString())
+        }
+    }
+}
+
+/** One product of the campaign: what the inventory says about its stock, and the month's goal when there is one. */
+@Composable
+private fun StockRowCard(row: CampaignStockRow) {
+    val info = row.info
+    CadyCard(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(row.productName, style = MaterialTheme.typography.titleSmall)
+                if (info == null) {
+                    Text(
+                        "لم يُربط هذا الصنف بالمخزون",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    val unit = if (info.unit.isBlank()) "" else " ${info.unit}"
+                    Text(
+                        "المخزون: ${info.onHand}$unit",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    info.goal?.let {
+                        Text(
+                            InventoryRules.goalText(it, info.unit),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    info.nextArrival?.let {
+                        Text(
+                            "تصل ${it.qty}$unit في ${it.date}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Pill(text = info?.status?.label ?: "بلا ربط")
         }
     }
 }

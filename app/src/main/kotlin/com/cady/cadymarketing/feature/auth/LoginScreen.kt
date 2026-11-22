@@ -108,7 +108,7 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
             modifier = Modifier.fillMaxWidth(),
             enabled = !state.isLoading,
             textStyle = fieldTextStyle,
-            label = { Text("البريد الإلكتروني") },
+            label = { Text("البريد الإلكتروني أو اسم المستخدم") },
             leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
             isError = state.error != null,
             keyboardOptions = KeyboardOptions(

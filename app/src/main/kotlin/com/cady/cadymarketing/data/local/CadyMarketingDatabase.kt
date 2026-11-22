@@ -25,8 +25,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SendMarkEntity::class,
         ResultEntity::class,
         OrderEntity::class,
+        SyncStateEntity::class,
+        OpLogEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class CadyMarketingDatabase : RoomDatabase() {
@@ -45,6 +47,8 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
     abstract fun audienceDao(): AudienceDao
 
     abstract fun reportDao(): ReportDao
+
+    abstract fun syncDao(): SyncDao
 
     companion object {
         const val NAME = "cady_marketing.db"
@@ -252,6 +256,32 @@ abstract class CadyMarketingDatabase : RoomDatabase() {
                         "PRIMARY KEY(`id`))",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_report_order_origin` ON `report_order` (`origin`)")
+            }
+        }
+
+        /** Phase 5: what the cloud is known to hold per document (for the sync) and the operations log. */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sync_state` (" +
+                        "`collection` TEXT NOT NULL, " +
+                        "`docId` TEXT NOT NULL, " +
+                        "`syncedUpdatedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`collection`, `docId`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `op_log` (" +
+                        "`id` TEXT NOT NULL, " +
+                        "`at` INTEGER NOT NULL, " +
+                        "`actor` TEXT NOT NULL, " +
+                        "`action` TEXT NOT NULL, " +
+                        "`subject` TEXT NOT NULL, " +
+                        "`detail` TEXT NOT NULL, " +
+                        "`org` TEXT NOT NULL, " +
+                        "`schemaVersion` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_op_log_at` ON `op_log` (`at`)")
             }
         }
     }

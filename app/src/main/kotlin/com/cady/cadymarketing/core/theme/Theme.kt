@@ -26,6 +26,7 @@ val MaterialTheme.cady: CadyExtraColors
 
 /**
  * @param darkTheme follows the system setting.
+ * @param style the card look chosen in Settings (see [CadyStyle]).
  * @param brandColor the colour taken from the brand identity (set in the Identity screen, phase 2).
  *        Null — or the default brand red — uses the hand-tuned red schemes; any other colour goes
  *        through the HSL-tone derivation below, the same approach Kady uses for its colour presets.
@@ -34,6 +35,7 @@ val MaterialTheme.cady: CadyExtraColors
 fun CadyMarketingTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     brandColor: Color? = null,
+    style: CadyStyle = CadyStyle.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = remember(brandColor, darkTheme) {
@@ -50,6 +52,7 @@ fun CadyMarketingTheme(
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl,
         LocalCadyColors provides extraColors,
+        LocalCadyStyle provides style,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

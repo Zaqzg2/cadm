@@ -5,6 +5,8 @@ import android.net.Uri
 import com.cady.cadymarketing.domain.engine.DefaultVocabulary
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.IdeaBank
+import com.cady.cadymarketing.domain.engine.StockNote
+import com.cady.cadymarketing.domain.engine.StockWarnings
 import com.cady.cadymarketing.domain.model.Brand
 import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.Channel
@@ -12,6 +14,7 @@ import com.cady.cadymarketing.domain.model.CheckResult
 import com.cady.cadymarketing.domain.model.Formula
 import com.cady.cadymarketing.domain.model.Product
 import com.cady.cadymarketing.domain.model.SavedContent
+import com.cady.cadymarketing.domain.model.StockInfo
 
 /** The six tools of the bottom bar. At most one panel is open at a time, and it never hides the preview. */
 enum class StudioTool { PRODUCT, CHANNEL, TEXT, DESIGN, PICTURE, SCHEDULE }
@@ -55,8 +58,14 @@ data class StudioState(
     val saved: List<SavedContent> = emptyList(),
     /** True when there is work that a close would lose. */
     val dirty: Boolean = false,
+    /** The stock of each product linked to a line of the inventory snapshot, and how old that snapshot is (days). */
+    val stock: Map<String, StockInfo> = emptyMap(),
+    val stockAgeDays: Int? = null,
 ) {
     val product: Product? get() = products.firstOrNull { it.id == productId }
+
+    /** A line about the chosen product's stock (ran out, low, or in surplus): the Studio warns, it never blocks. */
+    val stockNote: StockNote? get() = StockWarnings.note(stock[productId], stockAgeDays)
 
     /** The campaign the post is linked to: its code rides on every link of the text. */
     val campaign: Campaign? get() = campaigns.firstOrNull { it.id == campaignId }

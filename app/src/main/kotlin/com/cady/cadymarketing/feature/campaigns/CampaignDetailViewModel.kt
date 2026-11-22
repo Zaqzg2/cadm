@@ -9,8 +9,11 @@ import com.cady.cadymarketing.core.qr.QrBitmap
 import com.cady.cadymarketing.data.brand.BrandRepository
 import com.cady.cadymarketing.data.campaign.CampaignRepository
 import com.cady.cadymarketing.data.content.ContentRepository
+import com.cady.cadymarketing.data.inventory.InventoryRepository
 import com.cady.cadymarketing.data.media.ImageExporter
 import com.cady.cadymarketing.domain.engine.CampaignRules
+import com.cady.cadymarketing.domain.engine.CampaignStockRow
+import com.cady.cadymarketing.domain.engine.InventoryInsights
 import com.cady.cadymarketing.domain.engine.TrackingLink
 import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.CampaignStatus
@@ -37,6 +40,8 @@ data class CampaignDetailState(
     val posts: List<SavedContent> = emptyList(),
     val links: List<TrackingLink> = emptyList(),
     val qr: QrPreview? = null,
+    /** The campaign's products with what the inventory says about each (empty until a snapshot exists). */
+    val stockRows: List<CampaignStockRow> = emptyList(),
 )
 
 /** One-time things the screen must do. */
@@ -56,6 +61,7 @@ class CampaignDetailViewModel @Inject constructor(
     content: ContentRepository,
     private val brandRepository: BrandRepository,
     private val exporter: ImageExporter,
+    inventory: InventoryRepository,
 ) : ViewModel() {
 
     private val id: String = savedStateHandle.get<String>(Routes.ARG_ID).orEmpty()
@@ -66,13 +72,15 @@ class CampaignDetailViewModel @Inject constructor(
         content.observeByCampaign(id),
         brandRepository.observeBrand(),
         qr,
-    ) { campaign, posts, brand, preview ->
+        inventory.observeStock(),
+    ) { campaign, posts, brand, preview, stock ->
         CampaignDetailState(
             loaded = true,
             campaign = campaign,
             posts = posts,
             links = campaign?.let { CampaignRules.trackingLinks(brand, it.code) }.orEmpty(),
             qr = preview,
+            stockRows = InventoryInsights.campaignRows(posts, stock.byProduct, stock.hasSnapshot),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CampaignDetailState())
 

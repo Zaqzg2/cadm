@@ -2,9 +2,11 @@ package com.cady.cadymarketing.data.campaign
 
 import com.cady.cadymarketing.data.local.CampaignDao
 import com.cady.cadymarketing.data.local.CampaignEntity
+import com.cady.cadymarketing.data.oplog.OpLogRepository
 import com.cady.cadymarketing.domain.engine.CampaignRules
 import com.cady.cadymarketing.domain.model.Campaign
 import com.cady.cadymarketing.domain.model.CampaignStatus
+import com.cady.cadymarketing.domain.model.OpAction
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class CampaignRepository @Inject constructor(
     private val dao: CampaignDao,
+    private val opLog: OpLogRepository,
 ) {
     fun observeAll(): Flow<List<Campaign>> = dao.observeAll().map { rows -> rows.map { it.toDomain() } }
 
@@ -42,6 +45,7 @@ class CampaignRepository @Inject constructor(
             deletedAt = null,
         )
         dao.upsert(entity)
+        opLog.record(OpAction.CAMPAIGN_CREATED, entity.name, entity.code)
         return entity.toDomain()
     }
 
@@ -62,6 +66,7 @@ class CampaignRepository @Inject constructor(
     suspend fun setStatus(id: String, status: CampaignStatus) {
         val existing = dao.get(id) ?: return
         dao.upsert(existing.copy(status = status.code, updatedAt = System.currentTimeMillis()))
+        if (existing.status != status.code) opLog.record(OpAction.CAMPAIGN_STATUS, existing.name, status.label)
     }
 
     /** A soft delete: the row stays (with its code) so the links already shared are never reused. */
@@ -69,6 +74,7 @@ class CampaignRepository @Inject constructor(
         val existing = dao.get(id) ?: return
         val now = System.currentTimeMillis()
         dao.upsert(existing.copy(deletedAt = now, updatedAt = now))
+        opLog.record(OpAction.CAMPAIGN_DELETED, existing.name, existing.code)
     }
 
     private fun CampaignEntity.toDomain(): Campaign = Campaign(

@@ -1,6 +1,7 @@
 package com.cady.cadymarketing.domain.engine
 
 import com.cady.cadymarketing.domain.model.ContentStatus
+import com.cady.cadymarketing.domain.model.MktRole
 import com.cady.cadymarketing.domain.model.SavedContent
 
 /** A change of status the library offers on a post, with the words on its menu item. */
@@ -25,6 +26,10 @@ object LibraryRules {
     /** How many posts each status has (every status is present, zero included). */
     fun counts(all: List<SavedContent>): Map<ContentStatus, Int> =
         ContentStatus.entries.associateWith { status -> all.count { it.status == status } }
+
+    /** The status changes [role] is offered on a post: the manager gets all of them, a marketer only her own (see [ContentFlow]). */
+    fun moves(status: ContentStatus, role: MktRole): List<StatusMove> =
+        moves(status).filter { ContentFlow.canMove(role, status, it.target) }
 
     /**
      * The status changes offered on a post. Approval is not among them: a post is approved in the Studio, where the

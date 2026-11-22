@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.components.CadyCard
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.core.components.CadyScreen
 import com.cady.cadymarketing.core.components.EmptyState
 import com.cady.cadymarketing.core.components.PhasePill
@@ -58,12 +60,16 @@ fun CampaignsScreen(
         }
     }
 
+    // Campaigns are the manager's to make; a marketer sees them and writes posts for them.
+    val canManage = canUse(Feature.MANAGE_CAMPAIGNS)
     CadyScreen(
         title = "الحملات",
         snackbarHost = { SnackbarHost(snackbar) },
         actions = {
-            IconButton(onClick = { showForm = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "حملة جديدة")
+            if (canManage) {
+                IconButton(onClick = { showForm = true }) {
+                    Icon(Icons.Filled.Add, contentDescription = "حملة جديدة")
+                }
             }
         },
     ) { padding ->
@@ -94,7 +100,7 @@ fun CampaignsScreen(
                     icon = Icons.Filled.Campaign,
                     title = if (state.items.isEmpty()) "لا توجد حملات بعد" else "لا حملات في هذا القسم",
                     message = "الحملة تجمع منشورات فترة واحدة تحت رمز واحد، فتعرف من أين جاء كل طلب.",
-                    actionLabel = if (state.items.isEmpty()) "إنشاء أول حملة" else null,
+                    actionLabel = if (state.items.isEmpty() && canManage) "إنشاء أول حملة" else null,
                     onAction = { showForm = true },
                 )
                 else -> LazyColumn(

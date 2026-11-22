@@ -49,23 +49,30 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cady.cadymarketing.BuildConfig
 import com.cady.cadymarketing.core.components.CadyScreen
+import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.navigation.Routes
+import com.cady.cadymarketing.core.role.LocalRole
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
+import com.cady.cadymarketing.domain.model.MktRole
 
+/** [feature] is the permission the entry needs; null means every role sees it. */
 private data class MoreEntry(
     val route: String,
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
+    val feature: Feature? = null,
 )
 
 private val moreEntries = listOf(
     MoreEntry(Routes.PRODUCTS, "الأصناف والعروض", "الأصناف والعروض من كادي مع صورة محلية لكل صنف", Icons.Filled.Inventory2),
-    MoreEntry(Routes.IDENTITY, "الهوية", "الاسم والألوان والشعار والنبرة والعبارات الممنوعة", Icons.Filled.Palette),
-    MoreEntry(Routes.TEMPLATES, "القوالب والمفردات", "بنك المفردات والصيغ الجاهزة للتحرير", Icons.Filled.Description),
+    MoreEntry(Routes.IDENTITY, "الهوية", "الاسم والألوان والشعار والنبرة والعبارات الممنوعة", Icons.Filled.Palette, Feature.EDIT_IDENTITY),
+    MoreEntry(Routes.TEMPLATES, "القوالب والمفردات", "بنك المفردات والصيغ الجاهزة للتحرير", Icons.Filled.Description, Feature.EDIT_TEMPLATES),
     MoreEntry(Routes.LIBRARY, "المكتبة", "كل المحتوى مع بحث وتصفية بالحالة", Icons.Filled.PhotoLibrary),
-    MoreEntry(Routes.AUDIENCE, "الجمهور", "شرائح العملاء وقائمة الإرسال", Icons.Filled.Groups),
-    MoreEntry(Routes.REPORTS, "التقارير", "نتائج الحملات", Icons.Filled.BarChart),
-    MoreEntry(Routes.SETTINGS, "الفريق والإعدادات", "الدور والبوابة والنسخ الاحتياطي وسجل العمليات", Icons.Filled.Settings),
+    MoreEntry(Routes.AUDIENCE, "الجمهور", "شرائح العملاء وقائمة الإرسال", Icons.Filled.Groups, Feature.AUDIENCE),
+    MoreEntry(Routes.REPORTS, "التقارير", "نتائج الحملات", Icons.Filled.BarChart, Feature.REPORTS),
+    MoreEntry(Routes.SETTINGS, "الفريق والإعدادات", "الدور والمزامنة والتنبيهات والنسخ الاحتياطي وسجل العمليات", Icons.Filled.Settings),
 )
 
 /**
@@ -78,6 +85,8 @@ fun MoreScreen(
     onSignOut: () -> Unit,
 ) {
     var showSignOutDialog by remember { mutableStateOf(false) }
+    val role = LocalRole.current
+    val visibleEntries = moreEntries.filter { it.feature == null || canUse(it.feature) }
 
     CadyScreen(title = "المزيد") { padding ->
         LazyColumn(
@@ -87,8 +96,8 @@ fun MoreScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { AccountCard(email = email) }
-            items(moreEntries) { entry ->
+            item { AccountCard(email = email, role = role) }
+            items(visibleEntries) { entry ->
                 MoreEntryCard(entry = entry, onClick = { onNavigate(entry.route) })
             }
             item {
@@ -145,7 +154,7 @@ fun MoreScreen(
 }
 
 @Composable
-private fun AccountCard(email: String?) {
+private fun AccountCard(email: String?, role: MktRole) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
@@ -157,7 +166,7 @@ private fun AccountCard(email: String?) {
         ) {
             IconBadge(icon = Icons.Filled.Person)
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (email != null) "الحساب" else "وضع المعاينة",
                     style = MaterialTheme.typography.labelMedium,
@@ -167,6 +176,10 @@ private fun AccountCard(email: String?) {
                     text = email ?: "Firebase غير مربوط، فلا يوجد حساب مسجّل",
                     style = MaterialTheme.typography.bodyLarge,
                 )
+            }
+            if (email != null && role != MktRole.NONE) {
+                Spacer(Modifier.width(8.dp))
+                Pill(text = role.label)
             }
         }
     }

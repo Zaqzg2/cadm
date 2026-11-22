@@ -25,6 +25,11 @@ object Routes {
     const val REPORTS = "reports"
     const val SETTINGS = "settings"
 
+    // Reached from the settings screen.
+    const val TEAM = "team"
+    const val LOG = "oplog"
+    const val INVENTORY_LINKS = "inventory-links"
+
     // A campaign's own page.
     const val ARG_ID = "id"
     const val CAMPAIGN_DETAIL = "campaign/{id}"

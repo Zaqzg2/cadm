@@ -5,13 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.cady.cadymarketing.data.calendar.OccasionRepository
 import com.cady.cadymarketing.data.campaign.CampaignRepository
 import com.cady.cadymarketing.data.content.ContentRepository
+import com.cady.cadymarketing.data.inventory.InventoryRepository
+import com.cady.cadymarketing.domain.engine.Arrival
 import com.cady.cadymarketing.domain.engine.CalendarCell
 import com.cady.cadymarketing.domain.engine.CalendarEntries
 import com.cady.cadymarketing.domain.engine.CalendarMath
 import com.cady.cadymarketing.domain.engine.DateUtil
 import com.cady.cadymarketing.domain.engine.DayEntries
+import com.cady.cadymarketing.domain.engine.InventoryInsights
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,8 +35,12 @@ data class CalendarState(
     val selected: String,
     val grid: List<CalendarCell>,
     val days: Map<String, DayEntries>,
+    /** The deliveries the inventory snapshot expects, by day of the grid (empty without a snapshot). */
+    val arrivals: Map<String, List<Arrival>> = emptyMap(),
 ) {
     val selectedEntries: DayEntries? get() = days[selected]
+
+    val selectedArrivals: List<Arrival> get() = arrivals[selected].orEmpty()
 
     companion object {
         fun initial(today: String): CalendarState {
@@ -48,13 +56,14 @@ class CalendarViewModel @Inject constructor(
     content: ContentRepository,
     campaigns: CampaignRepository,
     private val occasions: OccasionRepository,
+    inventory: InventoryRepository,
 ) : ViewModel() {
 
     private val start = DateUtil.today()
     private val month = MutableStateFlow((CalendarMath.yearOf(start) ?: 2026) to (CalendarMath.monthOf(start) ?: 1))
     private val selected = MutableStateFlow(start)
 
-    val state: StateFlow<CalendarState> = combine(
+    private val base: Flow<CalendarState> = combine(
         month,
         selected,
         content.observeAll(),
@@ -71,6 +80,12 @@ class CalendarViewModel @Inject constructor(
             selected = picked,
             grid = grid,
             days = CalendarEntries.build(grid.first().date, grid.last().date, posts, campaignList, own, today),
+        )
+    }
+
+    val state: StateFlow<CalendarState> = combine(base, inventory.observeData()) { calendar, stock ->
+        calendar.copy(
+            arrivals = InventoryInsights.arrivals(stock.snapshot, stock.links, stock.products, calendar.grid.first().date, calendar.grid.last().date),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CalendarState.initial(start))
 

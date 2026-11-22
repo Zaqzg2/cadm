@@ -8,9 +8,12 @@ import com.cady.cadymarketing.data.catalog.CatalogException
 import com.cady.cadymarketing.data.catalog.CatalogRepository
 import com.cady.cadymarketing.data.catalog.RefreshReport
 import com.cady.cadymarketing.data.cloud.CloudErrors
+import com.cady.cadymarketing.data.inventory.InventoryRepository
 import com.cady.cadymarketing.data.media.PictureStore
+import com.cady.cadymarketing.domain.engine.InventoryRules
 import com.cady.cadymarketing.domain.engine.ProductText
 import com.cady.cadymarketing.domain.model.ProductRow
+import com.cady.cadymarketing.domain.model.StockInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
@@ -25,6 +28,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** What the stock says about a product, as a filter of the list (it only shows once an inventory snapshot exists). */
+enum class StockFilter(val label: String) {
+    ALL("الكل"),
+    PROMOTE("يحتاج ترويجًا"),
+    AVOID("لا تروّج"),
+}
+
 data class ProductsState(
     val rows: List<ProductRow> = emptyList(),
     val query: String = "",
@@ -32,12 +42,25 @@ data class ProductsState(
     val lastSyncAt: Long? = null,
     val report: RefreshReport? = null,
     val isPreview: Boolean = false,
+    /** The stock of each product that has a confirmed link to a line of the inventory snapshot. */
+    val stock: Map<String, StockInfo> = emptyMap(),
+    val hasSnapshot: Boolean = false,
+    val stockFilter: StockFilter = StockFilter.ALL,
 ) {
-    /** The rows that match the search box (name only). */
+    /** The rows that match the search box (name only) and the stock filter. */
     val visible: List<ProductRow>
         get() {
             val needle = query.trim()
-            return if (needle.isEmpty()) rows else rows.filter { it.product.name.contains(needle, ignoreCase = true) }
+            return rows.filter { row ->
+                val byName = needle.isEmpty() || row.product.name.contains(needle, ignoreCase = true)
+                val info = stock[row.product.id]
+                val byStock = when (stockFilter) {
+                    StockFilter.ALL -> true
+                    StockFilter.PROMOTE -> info != null && InventoryRules.needsPromotion(info)
+                    StockFilter.AVOID -> info != null && InventoryRules.shouldAvoid(info)
+                }
+                byName && byStock
+            }
         }
 }
 
@@ -45,6 +68,7 @@ data class ProductsState(
 class ProductsViewModel @Inject constructor(
     private val catalog: CatalogRepository,
     private val pictures: PictureStore,
+    private val inventory: InventoryRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProductsState(isPreview = catalog.isPreview))
@@ -60,6 +84,21 @@ class ProductsViewModel @Inject constructor(
         viewModelScope.launch {
             catalog.observeLastSync().collect { at -> _state.update { it.copy(lastSyncAt = at) } }
         }
+        viewModelScope.launch {
+            inventory.observeStock().collect { data ->
+                _state.update {
+                    it.copy(
+                        stock = data.byProduct,
+                        hasSnapshot = data.hasSnapshot,
+                        stockFilter = if (data.hasSnapshot) it.stockFilter else StockFilter.ALL,
+                    )
+                }
+            }
+        }
+    }
+
+    fun setStockFilter(filter: StockFilter) {
+        _state.update { it.copy(stockFilter = filter) }
     }
 
     fun setQuery(query: String) {

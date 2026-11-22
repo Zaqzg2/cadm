@@ -52,12 +52,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.components.CadyCard
+import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.core.components.CadyScreen
 import com.cady.cadymarketing.core.components.ConfirmDialog
 import com.cady.cadymarketing.core.components.PhasePill
 import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.components.StatusPill
 import com.cady.cadymarketing.core.theme.cady
+import com.cady.cadymarketing.domain.engine.Arrival
 import com.cady.cadymarketing.domain.engine.CalendarCell
 import com.cady.cadymarketing.domain.engine.CalendarMath
 import com.cady.cadymarketing.domain.engine.DayEntries
@@ -72,12 +75,15 @@ import com.cady.cadymarketing.domain.model.SavedContent
 @Composable
 fun CalendarScreen(
     onNewPost: (String) -> Unit,
+    onNewArrivalPost: (productId: String, date: String) -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenCampaign: (String) -> Unit,
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    // Occasions are the manager's; a marketer sees them and schedules posts around them.
+    val canManageOccasions = canUse(Feature.MANAGE_OCCASIONS)
     var showOccasion by remember { mutableStateOf(false) }
     var deleteOccasionId by remember { mutableStateOf<String?>(null) }
 
@@ -127,7 +133,10 @@ fun CalendarScreen(
                 DayDetails(
                     date = state.selected,
                     entries = state.selectedEntries,
+                    arrivals = state.selectedArrivals,
+                    onArrivalPost = { productId -> onNewArrivalPost(productId, state.selected) },
                     onNewPost = { onNewPost(state.selected) },
+                    canManageOccasions = canManageOccasions,
                     onNewOccasion = { showOccasion = true },
                     onDeleteOccasion = { id -> deleteOccasionId = id },
                     onOpenPost = onOpenPost,
@@ -285,6 +294,9 @@ private fun LegendItem(color: Color, label: String) {
 private fun DayDetails(
     date: String,
     entries: DayEntries?,
+    arrivals: List<Arrival>,
+    onArrivalPost: (String) -> Unit,
+    canManageOccasions: Boolean,
     onNewPost: () -> Unit,
     onNewOccasion: () -> Unit,
     onDeleteOccasion: (String) -> Unit,
@@ -295,24 +307,52 @@ private fun DayDetails(
         Text(CalendarMath.longDate(date), style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onNewPost) { Text("+ منشور في هذا اليوم") }
-            OutlinedButton(onClick = onNewOccasion) { Text("+ مناسبة") }
+            if (canManageOccasions) OutlinedButton(onClick = onNewOccasion) { Text("+ مناسبة") }
         }
+        arrivals.forEach { arrival -> ArrivalRow(arrival, onArrivalPost) }
         if (entries == null || entries.isEmpty) {
-            Text(
-                text = "لا شيء في هذا اليوم بعد.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (arrivals.isEmpty()) {
+                Text(
+                    text = "لا شيء في هذا اليوم بعد.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             return@Column
         }
-        entries.occasions.forEach { occasion -> OccasionRow(occasion, onDeleteOccasion) }
+        entries.occasions.forEach { occasion -> OccasionRow(occasion, canManageOccasions, onDeleteOccasion) }
         entries.campaigns.forEach { campaign -> CampaignRow(campaign, date, onClick = { onOpenCampaign(campaign.id) }) }
         entries.content.forEach { post -> PostRow(post, onClick = { onOpenPost(post.id) }) }
     }
 }
 
+/** A delivery the inventory expects on this day. A linked product gets a button for a "just arrived" post. */
 @Composable
-private fun OccasionRow(occasion: OccasionDay, onDelete: (String) -> Unit) {
+private fun ArrivalRow(arrival: Arrival, onPost: (String) -> Unit) {
+    CadyCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("وصول بضاعة: " + arrival.itemName, style = MaterialTheme.typography.bodyLarge)
+                val unit = if (arrival.unit.isBlank()) "" else " ${arrival.unit}"
+                Text(
+                    "${arrival.qty}$unit متوقعة من المخزون",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            val productId = arrival.productId
+            if (productId != null) {
+                TextButton(onClick = { onPost(productId) }) { Text("منشور") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OccasionRow(occasion: OccasionDay, canDelete: Boolean, onDelete: (String) -> Unit) {
     CadyCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
@@ -329,7 +369,7 @@ private fun OccasionRow(occasion: OccasionDay, onDelete: (String) -> Unit) {
             val id = occasion.id
             if (occasion.builtIn) {
                 Pill(text = "تقريبي", modifier = Modifier.padding(end = 8.dp))
-            } else if (id != null) {
+            } else if (id != null && canDelete) {
                 IconButton(onClick = { onDelete(id) }) {
                     Icon(Icons.Filled.Delete, contentDescription = "حذف المناسبة")
                 }

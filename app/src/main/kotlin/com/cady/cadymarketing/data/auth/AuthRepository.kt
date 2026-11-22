@@ -48,6 +48,11 @@ class AuthRepository @Inject constructor(
             }
         }
 
+    /** The signed-in account's uid, or null when nobody is signed in (or Firebase is not set up). */
+    fun currentUid(): String? = if (isConfigured) FirebaseAuth.getInstance().currentUser?.uid else null
+
+    fun currentEmail(): String? = if (isConfigured) FirebaseAuth.getInstance().currentUser?.email else null
+
     suspend fun signIn(email: String, password: String): Result<Unit> =
         try {
             FirebaseAuth.getInstance().signInWithEmailAndPassword(email, password).await()

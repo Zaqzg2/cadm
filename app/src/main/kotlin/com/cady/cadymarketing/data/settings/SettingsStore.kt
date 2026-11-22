@@ -6,7 +6,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.ReportSources
 import java.io.IOException
@@ -51,6 +53,13 @@ class SettingsStore @Inject constructor(
             it[GATEWAY_URL] = config.url.trim()
             it[GATEWAY_TOKEN] = config.token.trim()
         }
+    }
+
+    /** The card style the person chose (a CadyStyle code), or null when never chosen. */
+    val uiStyle: Flow<String?> = preferences.map { it[UI_STYLE] }
+
+    suspend fun setUiStyle(code: String) {
+        dataStore.edit { it[UI_STYLE] = code }
     }
 
     val studioPrefs: Flow<StudioPrefs> = preferences.map {
@@ -102,9 +111,63 @@ class SettingsStore @Inject constructor(
         }
     }
 
+    // ------------------------------------------------------------------ phase 5: sync, reminders, role cache
+
+    /** Sync soon after a change and whenever the app opens. On by default. */
+    val autoSync: Flow<Boolean> = preferences.map { it[AUTO_SYNC] ?: true }
+
+    suspend fun setAutoSync(on: Boolean) {
+        dataStore.edit { it[AUTO_SYNC] = on }
+    }
+
+    /** A notification when an approved post's time comes. On by default. */
+    val remindersOn: Flow<Boolean> = preferences.map { it[REMINDERS_ON] ?: true }
+
+    suspend fun setRemindersOn(on: Boolean) {
+        dataStore.edit { it[REMINDERS_ON] = on }
+    }
+
+    /** The check every 15 minutes for posts that wait for the manager or came back to the marketer. On by default. */
+    val reviewCheckOn: Flow<Boolean> = preferences.map { it[REVIEW_CHECK_ON] ?: true }
+
+    suspend fun setReviewCheckOn(on: Boolean) {
+        dataStore.edit { it[REVIEW_CHECK_ON] = on }
+    }
+
+    /** "id|scheduledAt" of every reminder that was handed to the system, so only changes are handed over again. */
+    val scheduledReminders: Flow<Set<String>> = preferences.map { it[SCHEDULED_REMINDERS].orEmpty() }
+
+    suspend fun setScheduledReminders(keys: Set<String>) {
+        dataStore.edit { it[SCHEDULED_REMINDERS] = keys }
+    }
+
+    /** The posts (id:updatedAt) the periodic check already told the person about, oldest first. */
+    val notifiedKeys: Flow<List<String>> = preferences.map { store ->
+        store[NOTIFIED_KEYS].orEmpty().split(SEPARATOR).filter { it.isNotEmpty() }
+    }
+
+    suspend fun setNotifiedKeys(keys: List<String>) {
+        dataStore.edit { it[NOTIFIED_KEYS] = keys.joinToString(SEPARATOR) }
+    }
+
+    /** The role found at the last sign-in check, as "uid|role": lets the app open offline. */
+    val cachedRole: Flow<String> = preferences.map { it[CACHED_ROLE].orEmpty() }
+
+    suspend fun setCachedRole(value: String) {
+        dataStore.edit { it[CACHED_ROLE] = value }
+    }
+
+    /** When the last backup file was written (epoch milliseconds), or 0. */
+    val lastBackupAt: Flow<Long> = preferences.map { it[LAST_BACKUP_AT] ?: 0L }
+
+    suspend fun setLastBackupAt(at: Long) {
+        dataStore.edit { it[LAST_BACKUP_AT] = at }
+    }
+
     private companion object {
         const val SEPARATOR = "\u001F"
         val LAST_EMAIL = stringPreferencesKey("last_email")
+        val UI_STYLE = stringPreferencesKey("ui_style")
         val GATEWAY_URL = stringPreferencesKey("gateway_url")
         val GATEWAY_TOKEN = stringPreferencesKey("gateway_token")
         val STUDIO_CHANNEL = stringPreferencesKey("studio_channel")
@@ -117,5 +180,12 @@ class SettingsStore @Inject constructor(
         val KADY_ENABLED = booleanPreferencesKey("report_kady_enabled")
         val KADY_COLLECTION = stringPreferencesKey("report_kady_collection")
         val KADY_FIELD = stringPreferencesKey("report_kady_field")
+        val AUTO_SYNC = booleanPreferencesKey("auto_sync")
+        val REMINDERS_ON = booleanPreferencesKey("reminders_on")
+        val REVIEW_CHECK_ON = booleanPreferencesKey("review_check_on")
+        val SCHEDULED_REMINDERS = stringSetPreferencesKey("scheduled_reminders")
+        val NOTIFIED_KEYS = stringPreferencesKey("notified_keys")
+        val CACHED_ROLE = stringPreferencesKey("cached_role")
+        val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
     }
 }
