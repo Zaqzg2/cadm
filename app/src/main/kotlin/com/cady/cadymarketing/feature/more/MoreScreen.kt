@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cady.cadymarketing.BuildConfig
+import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.components.CadyScreen
 import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.navigation.Routes
@@ -155,11 +156,7 @@ fun MoreScreen(
 
 @Composable
 private fun AccountCard(email: String?, role: MktRole) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
+    CadyCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -187,12 +184,7 @@ private fun AccountCard(email: String?, role: MktRole) {
 
 @Composable
 private fun MoreEntryCard(entry: MoreEntry, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
+    CadyCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,

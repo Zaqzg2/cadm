@@ -10,13 +10,20 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import com.cady.cadymarketing.core.theme.LocalCadyStyle
+import com.cady.cadymarketing.core.theme.topBarLook
 
 /**
- * The frame every screen sits in: a centred top bar and the page colour behind it.
+ * The frame every screen sits in: a centred top bar over the page. The page itself is drawn once
+ * for the whole app by the theme (flat, glows or a wash, depending on the chosen style), so this
+ * frame and its top bar are see-through.
  *
  * @param onClose shows an X (full-screen workspaces such as the Studio).
  * @param onBack shows a back arrow (screens reached from "More").
@@ -36,8 +43,11 @@ fun CadyScreen(
     withBottomInset: Boolean = false,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val look = LocalCadyStyle.current
     Scaffold(
         modifier = modifier,
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(title) },
@@ -53,6 +63,11 @@ fun CadyScreen(
                     }
                 },
                 actions = actions,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                ),
+                modifier = Modifier.topBarLook(look),
             )
         },
         snackbarHost = snackbarHost,

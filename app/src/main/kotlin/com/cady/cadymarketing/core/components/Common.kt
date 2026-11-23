@@ -40,6 +40,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.cady.cadymarketing.core.theme.LocalCadyStyle
+import com.cady.cadymarketing.core.theme.cardShadowFor
 
 /** A picture kept in the app's own storage, loaded off the main thread. Shows [fallback] until it is there (or when there is none). */
 @Composable
@@ -77,19 +79,32 @@ fun LocalPicture(
     }
 }
 
-/** The white card with a thin border that every list item in the app uses. */
+/**
+ * The card every list item in the app uses. How it looks (white with a thin border, frosted glass,
+ * a raised soft surface, …) is the chosen style's decision; see `CadyStyleTokens`.
+ *
+ * @param selected draws the card as the chosen one: a thick border in the brand colour.
+ */
 @Composable
 fun CadyCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    selected: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    val look = LocalCadyStyle.current
+    val shape = RoundedCornerShape(look.cardCorner)
+    val colors = CardDefaults.cardColors(
+        containerColor = look.cardContainer,
+        contentColor = look.colorScheme.onSurface,
+    )
+    val elevation = CardDefaults.cardElevation(defaultElevation = look.cardElevation)
+    val border = if (selected) BorderStroke(2.dp, look.colorScheme.primary) else look.cardBorder
+    val styled = modifier.cardShadowFor(look)
     if (onClick != null) {
-        Card(onClick = onClick, modifier = modifier, colors = colors, border = border) { content() }
+        Card(onClick = onClick, modifier = styled, shape = shape, colors = colors, elevation = elevation, border = border) { content() }
     } else {
-        Card(modifier = modifier, colors = colors, border = border) { content() }
+        Card(modifier = styled, shape = shape, colors = colors, elevation = elevation, border = border) { content() }
     }
 }
 

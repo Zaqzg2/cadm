@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.components.LocalPicture
 import com.cady.cadymarketing.core.poster.PosterDesigns
 import com.cady.cadymarketing.core.theme.cady
@@ -221,12 +222,7 @@ private fun ProductCard(
     modifier: Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Card(
-        onClick = onClick,
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLowest),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) scheme.primary else scheme.outlineVariant),
-    ) {
+    CadyCard(onClick = onClick, modifier = modifier, selected = selected) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -342,10 +338,7 @@ private fun TextPanel(state: StudioState, actions: StudioActions) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             state.ideas.forEachIndexed { index, idea ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                ) {
+                CadyCard {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(idea, style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { actions.onUseIdea(index) }) { Text("اكتب منشورًا") }

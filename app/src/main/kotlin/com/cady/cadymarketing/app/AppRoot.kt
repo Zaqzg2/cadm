@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.role.LocalRole
@@ -35,7 +36,9 @@ fun AppRoot(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
+        // See-through: the page is drawn once behind the whole app by the theme.
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
     ) {
         when (val state = authState) {
             AuthState.Loading -> Unit

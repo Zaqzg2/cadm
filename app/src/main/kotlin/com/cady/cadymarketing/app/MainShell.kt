@@ -7,14 +7,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -30,6 +33,8 @@ import com.cady.cadymarketing.core.components.ManagerOnlyScreen
 import com.cady.cadymarketing.core.navigation.BottomTab
 import com.cady.cadymarketing.core.navigation.Routes
 import com.cady.cadymarketing.core.role.canUse
+import com.cady.cadymarketing.core.theme.LocalCadyStyle
+import com.cady.cadymarketing.core.theme.barLook
 import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.feature.audience.AudienceScreen
 import com.cady.cadymarketing.feature.audience.SendListScreen
@@ -43,6 +48,7 @@ import com.cady.cadymarketing.feature.more.MoreScreen
 import com.cady.cadymarketing.feature.products.ProductsScreen
 import com.cady.cadymarketing.feature.reports.ReportsScreen
 import com.cady.cadymarketing.feature.inventory.InventoryLinksScreen
+import com.cady.cadymarketing.feature.settings.AppearanceScreen
 import com.cady.cadymarketing.feature.settings.LogScreen
 import com.cady.cadymarketing.feature.settings.SettingsScreen
 import com.cady.cadymarketing.feature.settings.TeamScreen
@@ -81,6 +87,9 @@ fun MainShell(
     }
 
     Scaffold(
+        // See-through: the page is drawn once behind the whole app by the theme.
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             AnimatedVisibility(visible = showBottomBar) {
@@ -181,8 +190,10 @@ fun MainShell(
                     onTeam = { navController.navigate(Routes.TEAM) },
                     onLog = { navController.navigate(Routes.LOG) },
                     onInventoryLinks = { navController.navigate(Routes.INVENTORY_LINKS) },
+                    onAppearance = { navController.navigate(Routes.APPEARANCE) },
                 )
             }
+            composable(Routes.APPEARANCE) { AppearanceScreen(onBack = goBack) }
             composable(Routes.INVENTORY_LINKS) {
                 if (canUse(Feature.MANAGE_INVENTORY)) InventoryLinksScreen(onBack = goBack) else ManagerOnlyScreen("ربط الأصناف", goBack)
             }
@@ -233,7 +244,11 @@ private fun MarketingBottomBar(
     currentDestination: NavDestination?,
     onTabClick: (BottomTab) -> Unit,
 ) {
-    NavigationBar {
+    val look = LocalCadyStyle.current
+    NavigationBar(
+        modifier = Modifier.barLook(look),
+        containerColor = look.barContainer,
+    ) {
         BottomTab.entries.forEach { tab ->
             val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
             NavigationBarItem(
@@ -241,6 +256,11 @@ private fun MarketingBottomBar(
                 onClick = { onTabClick(tab) },
                 icon = { Icon(tab.icon, contentDescription = null) },
                 label = { Text(tab.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = look.barSelected,
+                    selectedTextColor = look.barSelected,
+                    indicatorColor = look.barIndicator,
+                ),
             )
         }
     }

@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.ReportSources
+import com.cady.cadymarketing.domain.model.AppStyle
+import com.cady.cadymarketing.domain.model.ThemeMode
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -157,9 +159,25 @@ class SettingsStore @Inject constructor(
         dataStore.edit { it[LAST_BACKUP_AT] = at }
     }
 
+    /** The look chosen in Settings → المظهر. Per device; anything unknown reads as the classic look. */
+    val appStyle: Flow<AppStyle> = preferences.map { AppStyle.fromId(it[APP_STYLE]) }
+
+    suspend fun setAppStyle(style: AppStyle) {
+        dataStore.edit { it[APP_STYLE] = style.id }
+    }
+
+    /** Light, dark, or follow the phone (the default). */
+    val themeMode: Flow<ThemeMode> = preferences.map { ThemeMode.fromId(it[THEME_MODE]) }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[THEME_MODE] = mode.id }
+    }
+
     private companion object {
         const val SEPARATOR = "\u001F"
         val LAST_EMAIL = stringPreferencesKey("last_email")
+        val APP_STYLE = stringPreferencesKey("app_style")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         val GATEWAY_URL = stringPreferencesKey("gateway_url")
         val GATEWAY_TOKEN = stringPreferencesKey("gateway_token")
         val STUDIO_CHANNEL = stringPreferencesKey("studio_channel")

@@ -29,6 +29,7 @@ object Routes {
     const val TEAM = "team"
     const val LOG = "oplog"
     const val INVENTORY_LINKS = "inventory-links"
+    const val APPEARANCE = "appearance"
 
     // A campaign's own page.
     const val ARG_ID = "id"

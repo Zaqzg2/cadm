@@ -69,6 +69,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -85,7 +86,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.role.LocalRole
 import com.cady.cadymarketing.core.components.EmptyState
+import com.cady.cadymarketing.core.theme.LocalCadyStyle
+import com.cady.cadymarketing.core.theme.barLook
 import com.cady.cadymarketing.core.theme.cady
+import com.cady.cadymarketing.core.theme.topBarLook
 import com.cady.cadymarketing.core.util.Clipboard
 import com.cady.cadymarketing.domain.engine.ContentFlow
 import com.cady.cadymarketing.domain.engine.NoteLevel
@@ -193,6 +197,9 @@ fun StudioScreen(
 
     Scaffold(
         modifier = Modifier.imePadding(),
+        // See-through: the page is drawn once behind the whole app by the theme.
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(hostState = snackbar) },
         topBar = {
@@ -322,7 +329,11 @@ private fun StudioTopBar(
     onApprove: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.surface) {
+    Surface(
+        color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.topBarLook(LocalCadyStyle.current),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -551,7 +562,8 @@ private val toolDefs = listOf(
 
 @Composable
 private fun StudioToolBar(openTool: StudioTool?, onTool: (StudioTool) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 2.dp) {
+    val look = LocalCadyStyle.current
+    Surface(color = look.barContainer, tonalElevation = 2.dp, modifier = Modifier.barLook(look)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -573,7 +585,7 @@ private fun StudioToolBar(openTool: StudioTool?, onTool: (StudioTool) -> Unit) {
                             .width(28.dp)
                             .height(3.dp)
                             .background(
-                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+                                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 shape = RoundedCornerShape(2.dp),
                             ),
                     )

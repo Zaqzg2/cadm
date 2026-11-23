@@ -77,6 +77,7 @@ fun SettingsScreen(
     onTeam: () -> Unit,
     onLog: () -> Unit,
     onInventoryLinks: () -> Unit,
+    onAppearance: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -125,6 +126,13 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { AccountCard(state, onRecheck = viewModel::recheckRole, onDetails = { showDiagnostics = true }) }
+            item {
+                LinkCard(
+                    title = "المظهر",
+                    subtitle = "نمط التطبيق (زجاجي، ناعم، جريء…) والوضع الفاتح أو الداكن",
+                    onClick = onAppearance,
+                )
+            }
             item { SyncCard(state, onSync = viewModel::syncNow, onAutoSync = viewModel::setAutoSync) }
             item {
                 NotificationsCard(

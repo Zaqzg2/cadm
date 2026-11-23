@@ -1,6 +1,8 @@
 package com.cady.cadymarketing.core.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -10,11 +12,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.graphics.ColorUtils
+import com.cady.cadymarketing.domain.model.AppStyle
 
 /** The hero / status colours that sit beside the Material scheme — read with `MaterialTheme.cady`. */
 val LocalCadyColors = staticCompositionLocalOf { LightExtraColors }
@@ -25,38 +29,50 @@ val MaterialTheme.cady: CadyExtraColors
     get() = LocalCadyColors.current
 
 /**
- * @param darkTheme follows the system setting.
+ * @param darkTheme light or dark; the caller decides (the phone's setting, or the choice in Settings → المظهر).
  * @param brandColor the colour taken from the brand identity (set in the Identity screen, phase 2).
  *        Null — or the default brand red — uses the hand-tuned red schemes; any other colour goes
  *        through the HSL-tone derivation below, the same approach Kady uses for its colour presets.
+ * @param style how the page, the cards and the bars are drawn (Settings → المظهر). The colours always
+ *        come from the brand scheme, so every style works with every brand colour, in light and dark.
  */
 @Composable
 fun CadyMarketingTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     brandColor: Color? = null,
+    style: AppStyle = AppStyle.CLASSIC,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = remember(brandColor, darkTheme) {
+    val baseScheme = remember(brandColor, darkTheme) {
         if (brandColor == null || brandColor == CadyRed) {
             if (darkTheme) DarkColorScheme else LightColorScheme
         } else {
             deriveColorScheme(brandColor, darkTheme)
         }
     }
-    val extraColors = remember(colorScheme, darkTheme) { buildExtraColors(colorScheme, darkTheme) }
+    val extraColors = remember(baseScheme, darkTheme) { buildExtraColors(baseScheme, darkTheme) }
+    val look = remember(style, baseScheme, extraColors, darkTheme) {
+        buildStyleTokens(style, baseScheme, extraColors, darkTheme)
+    }
 
     // The app is Arabic-only regardless of the device's system language, so RTL is forced here
     // (same as Kady) rather than left to follow the system locale.
     CompositionLocalProvider(
         LocalLayoutDirection provides LayoutDirection.Rtl,
         LocalCadyColors provides extraColors,
+        LocalCadyStyle provides look,
     ) {
         MaterialTheme(
-            colorScheme = colorScheme,
-            typography = CadyTypography,
-            shapes = CadyShapes,
-            content = content,
-        )
+            colorScheme = look.colorScheme,
+            typography = look.typography,
+            shapes = look.shapes,
+        ) {
+            // One page under the whole app. Every screen's own frame is see-through, so the style's
+            // background (flat, glows, a wash) shows behind the top bar, the content and the bottom bar alike.
+            Box(modifier = Modifier.fillMaxSize().styledBackdrop(look)) {
+                content()
+            }
+        }
     }
 }
 
