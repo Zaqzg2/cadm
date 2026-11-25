@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The options that appear when the app icon is pressed and held on the home screen.
+    Each one opens the main screen with one of the actions in LaunchActions (domain/engine/Incoming.kt); the app
+    takes it once the person is signed in, so a shortcut used before sign-in simply waits for it.
+    The package and class below must match applicationId and MainActivity.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="new_post"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_post"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutLongLabel="@string/shortcut_new_post_long"
+        android:shortcutShortLabel="@string/shortcut_new_post_short">
+        <intent
+            android:action="com.cady.cadymarketing.action.NEW_POST"
+            android:targetClass="com.cady.cadymarketing.MainActivity"
+            android:targetPackage="com.cady.cadymarketing" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="idea_of_day"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_idea"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutLongLabel="@string/shortcut_idea_long"
+        android:shortcutShortLabel="@string/shortcut_idea_short">
+        <intent
+            android:action="com.cady.cadymarketing.action.IDEA_OF_DAY"
+            android:targetClass="com.cady.cadymarketing.MainActivity"
+            android:targetPackage="com.cady.cadymarketing" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="calendar"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_calendar"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutLongLabel="@string/shortcut_calendar_long"
+        android:shortcutShortLabel="@string/shortcut_calendar_short">
+        <intent
+            android:action="com.cady.cadymarketing.action.OPEN_CALENDAR"
+            android:targetClass="com.cady.cadymarketing.MainActivity"
+            android:targetPackage="com.cady.cadymarketing" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="library"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_library"
+        android:shortcutDisabledMessage="@string/shortcut_disabled"
+        android:shortcutLongLabel="@string/shortcut_library_long"
+        android:shortcutShortLabel="@string/shortcut_library_short">
+        <intent
+            android:action="com.cady.cadymarketing.action.OPEN_LIBRARY"
+            android:targetClass="com.cady.cadymarketing.MainActivity"
+            android:targetPackage="com.cady.cadymarketing" />
+    </shortcut>
+</shortcuts>

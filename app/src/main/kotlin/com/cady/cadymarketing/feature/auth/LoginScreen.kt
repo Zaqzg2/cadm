@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.theme.cady
 
 /** Email and password of the same Firebase account used in Kady. */
@@ -100,85 +101,90 @@ fun LoginScreen(viewModel: LoginViewModel = hiltViewModel()) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
 
-        OutlinedTextField(
-            value = state.email,
-            onValueChange = viewModel::onEmailChange,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.isLoading,
-            textStyle = fieldTextStyle,
-            label = { Text("البريد الإلكتروني أو اسم المستخدم") },
-            leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
-            isError = state.error != null,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next,
-            ),
-            singleLine = true,
-        )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = state.password,
-            onValueChange = viewModel::onPasswordChange,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.isLoading,
-            textStyle = fieldTextStyle,
-            label = { Text("كلمة المرور") },
-            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                        contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+        // The form sits on one card of the app's material (glass by default), over the page's glows.
+        CadyCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.email,
+                    onValueChange = viewModel::onEmailChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading,
+                    textStyle = fieldTextStyle,
+                    label = { Text("البريد الإلكتروني أو اسم المستخدم") },
+                    leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) },
+                    isError = state.error != null,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next,
+                    ),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = state.password,
+                    onValueChange = viewModel::onPasswordChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.isLoading,
+                    textStyle = fieldTextStyle,
+                    label = { Text("كلمة المرور") },
+                    leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور",
+                            )
+                        }
+                    },
+                    isError = state.error != null,
+                    visualTransformation = if (passwordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            viewModel.signIn()
+                        },
+                    ),
+                    singleLine = true,
+                )
+
+                state.error?.let { message ->
+                    Text(
+                        text = message,
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
-            },
-            isError = state.error != null,
-            visualTransformation = if (passwordVisible) {
-                VisualTransformation.None
-            } else {
-                PasswordVisualTransformation()
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    focusManager.clearFocus()
-                    viewModel.signIn()
-                },
-            ),
-            singleLine = true,
-        )
 
-        state.error?.let { message ->
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = message,
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Button(
-            onClick = viewModel::signIn,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = !state.isLoading,
-        ) {
-            if (state.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            } else {
-                Text("تسجيل الدخول")
+                Button(
+                    onClick = viewModel::signIn,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    enabled = !state.isLoading,
+                ) {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text("تسجيل الدخول")
+                    }
+                }
             }
         }
     }

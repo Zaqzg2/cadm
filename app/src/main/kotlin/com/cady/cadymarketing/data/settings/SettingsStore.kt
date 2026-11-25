@@ -159,7 +159,7 @@ class SettingsStore @Inject constructor(
         dataStore.edit { it[LAST_BACKUP_AT] = at }
     }
 
-    /** The look chosen in Settings → المظهر. Per device; anything unknown reads as the classic look. */
+    /** The look chosen in Settings → المظهر. Per device; nothing saved yet, or anything unknown, reads as the default look (glass). */
     val appStyle: Flow<AppStyle> = preferences.map { AppStyle.fromId(it[APP_STYLE]) }
 
     suspend fun setAppStyle(style: AppStyle) {

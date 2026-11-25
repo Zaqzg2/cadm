@@ -16,8 +16,11 @@ enum class AppStyle(val id: String, val label: String, val blurb: String) {
     BOLD("bold", "جريء", "حدود سميكة وظل صلب وزوايا حادة");
 
     companion object {
-        /** The style saved under [id]; nothing saved yet, or anything unknown, is the classic one. */
-        fun fromId(id: String?): AppStyle = entries.firstOrNull { it.id == id } ?: CLASSIC
+        /** What the app opens with until the person picks another: the glass look (since phase 8). */
+        val DEFAULT: AppStyle = GLASS
+
+        /** The style saved under [id]; nothing saved yet, or anything unknown, is the default (glass). */
+        fun fromId(id: String?): AppStyle = entries.firstOrNull { it.id == id } ?: DEFAULT
     }
 }
 
@@ -35,6 +38,6 @@ enum class ThemeMode(val id: String, val label: String) {
 
 /** What was picked in Settings → المظهر. */
 data class Appearance(
-    val style: AppStyle = AppStyle.CLASSIC,
+    val style: AppStyle = AppStyle.DEFAULT,
     val mode: ThemeMode = ThemeMode.SYSTEM,
 )

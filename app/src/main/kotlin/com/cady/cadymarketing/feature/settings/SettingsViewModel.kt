@@ -8,6 +8,7 @@ import com.cady.cadymarketing.data.backup.BackupRepository
 import com.cady.cadymarketing.data.inventory.InventoryException
 import com.cady.cadymarketing.data.inventory.InventoryRepository
 import com.cady.cadymarketing.data.inventory.InventorySummary
+import com.cady.cadymarketing.data.launch.LaunchInbox
 import com.cady.cadymarketing.data.notify.BackgroundWork
 import com.cady.cadymarketing.data.notify.Notifier
 import com.cady.cadymarketing.data.settings.SettingsStore
@@ -17,14 +18,18 @@ import com.cady.cadymarketing.data.sync.SyncUiState
 import com.cady.cadymarketing.data.team.RoleRepository
 import com.cady.cadymarketing.domain.engine.BackupDecode
 import com.cady.cadymarketing.domain.engine.BackupFile
+import com.cady.cadymarketing.domain.engine.Feature
 import com.cady.cadymarketing.domain.engine.GatewayClient
 import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.GatewayException
+import com.cady.cadymarketing.domain.engine.Permissions
 import com.cady.cadymarketing.domain.model.MktRole
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -67,6 +72,7 @@ class SettingsViewModel @Inject constructor(
     private val inventory: InventoryRepository,
     private val notifier: Notifier,
     private val background: BackgroundWork,
+    private val launchInbox: LaunchInbox,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -96,6 +102,32 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { inventory.observeSummary().collect { summary -> _state.update { it.copy(inventory = summary) } } }
         viewModelScope.launch { syncManager.refreshPending() }
         refreshNotifications()
+        openSharedFile()
+    }
+
+    /**
+     * A JSON file was shared to the app, or opened with it: a backup shows what it holds and waits for the confirmation
+     * (nothing changes before that), and the inventory app's snapshot is stored when the account may manage the inventory.
+     */
+    private fun openSharedFile() {
+        val shared = launchInbox.takeStagedFile() ?: return
+        viewModelScope.launch {
+            val uri = Uri.fromFile(File(shared.path))
+            _state.update { it.copy(working = true) }
+            when (val decoded = backup.read(uri)) {
+                is BackupDecode.Ok -> _state.update { it.copy(working = false, restore = RestorePreview(decoded.file, decoded.skipped)) }
+                is BackupDecode.Bad -> {
+                    _state.update { it.copy(working = false) }
+                    // The screen has just opened: give it a moment to start listening for messages.
+                    delay(MESSAGE_DELAY_MS)
+                    if (Permissions.can(roles.currentRole(), Feature.MANAGE_INVENTORY)) {
+                        importInventory(uri)
+                    } else {
+                        _messages.emit(decoded.message)
+                    }
+                }
+            }
+        }
     }
 
     /** Called when the screen comes back (after the system's permission dialog or settings page). */
@@ -266,5 +298,9 @@ class SettingsViewModel @Inject constructor(
                 syncManager.refreshPending()
             }
         }
+    }
+
+    private companion object {
+        const val MESSAGE_DELAY_MS = 400L
     }
 }

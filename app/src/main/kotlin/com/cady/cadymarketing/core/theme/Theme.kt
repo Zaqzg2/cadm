@@ -40,7 +40,7 @@ val MaterialTheme.cady: CadyExtraColors
 fun CadyMarketingTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     brandColor: Color? = null,
-    style: AppStyle = AppStyle.CLASSIC,
+    style: AppStyle = AppStyle.DEFAULT,
     content: @Composable () -> Unit,
 ) {
     val baseScheme = remember(brandColor, darkTheme) {

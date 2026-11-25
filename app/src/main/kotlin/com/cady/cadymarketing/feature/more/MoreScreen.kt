@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -48,8 +48,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cady.cadymarketing.BuildConfig
+import com.cady.cadymarketing.core.components.Appear
 import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.components.CadyScreen
+import com.cady.cadymarketing.core.components.IconBadge
 import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.navigation.Routes
 import com.cady.cadymarketing.core.role.LocalRole
@@ -97,9 +99,11 @@ fun MoreScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { AccountCard(email = email, role = role) }
-            items(visibleEntries) { entry ->
-                MoreEntryCard(entry = entry, onClick = { onNavigate(entry.route) })
+            item { Appear(index = 0, modifier = Modifier.fillMaxWidth()) { AccountCard(email = email, role = role) } }
+            itemsIndexed(visibleEntries) { index, entry ->
+                Appear(index = index + 1, modifier = Modifier.fillMaxWidth()) {
+                    MoreEntryCard(entry = entry, onClick = { onNavigate(entry.route) })
+                }
             }
             item {
                 Spacer(Modifier.height(6.dp))
@@ -208,19 +212,3 @@ private fun MoreEntryCard(entry: MoreEntry, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun IconBadge(icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-    }
-}

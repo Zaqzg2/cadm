@@ -45,8 +45,11 @@ object Routes {
     const val ARG_DATE = "date"
     const val ARG_PRODUCT_ID = "productId"
     const val ARG_IDEA = "idea"
+
+    /** The Studio opened for something another app shared (a picture or a text): see `LaunchInbox`. */
+    const val ARG_SHARED = "shared"
     const val STUDIO_PATTERN =
-        "studio?contentId={contentId}&campaignId={campaignId}&date={date}&productId={productId}&idea={idea}"
+        "studio?contentId={contentId}&campaignId={campaignId}&date={date}&productId={productId}&idea={idea}&shared={shared}"
 
     /** The bottom bar is visible only on these routes. */
     val tabRoutes: Set<String> = setOf(HOME, CAMPAIGNS, CALENDAR, MORE)
@@ -63,7 +66,7 @@ object Routes {
 
     /**
      * The Studio, optionally started on something: a saved post to edit, a campaign to link, a day to schedule for,
-     * a product to write about, or the idea of the day.
+     * a product to write about, the idea of the day, or what another app shared to this one.
      */
     fun studio(
         contentId: String? = null,
@@ -71,6 +74,7 @@ object Routes {
         date: String? = null,
         productId: String? = null,
         ideaOfDay: Boolean = false,
+        shared: Boolean = false,
     ): String {
         val parts = ArrayList<String>()
         if (contentId != null) parts.add("$ARG_CONTENT_ID=" + encode(contentId))
@@ -78,6 +82,7 @@ object Routes {
         if (date != null) parts.add("$ARG_DATE=" + encode(date))
         if (productId != null) parts.add("$ARG_PRODUCT_ID=" + encode(productId))
         if (ideaOfDay) parts.add("$ARG_IDEA=1")
+        if (shared) parts.add("$ARG_SHARED=1")
         return if (parts.isEmpty()) STUDIO else STUDIO + "?" + parts.joinToString("&")
     }
 

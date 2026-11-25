@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's speech bubble with three dots (same shape as the launcher icon), centred and enlarged for the widget header. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group
+        android:translateX="-33"
+        android:translateY="-30">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M34,32h40a6,6 0,0 1,6 6v22a6,6 0,0 1,-6 6h-22l-10,10v-10h-8a6,6 0,0 1,-6 -6v-22a6,6 0,0 1,6 -6z M41,49a3,3 0,1 0,6 0a3,3 0,1 0,-6 0z M51,49a3,3 0,1 0,6 0a3,3 0,1 0,-6 0z M61,49a3,3 0,1 0,6 0a3,3 0,1 0,-6 0z" />
+    </group>
+</vector>

@@ -13,14 +13,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.cady.cadymarketing.app.AppRoot
 import com.cady.cadymarketing.core.theme.CadyMarketingTheme
+import com.cady.cadymarketing.data.launch.LaunchInbox
 import com.cady.cadymarketing.domain.model.ThemeMode
+import com.cady.cadymarketing.widget.CadyWidgetProvider
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+
+    /** Where shortcuts, the widget and other apps' Share / "Open with" leave their request (see [LaunchInbox]). */
+    @Inject
+    lateinit var launchInbox: LaunchInbox
 
     /** The post a reminder notification asked to open; the shell opens it in the Studio and clears this. */
     private var openContentId by mutableStateOf<String?>(null)
@@ -28,13 +37,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         openContentId = intent?.getStringExtra(EXTRA_OPEN_CONTENT)
+        // Only on the first creation: after a rotation the same intent comes back, and a share must not run twice.
+        if (savedInstanceState == null) takeLaunchFrom(intent)
         enableEdgeToEdge()
         setContent {
             val brandColor by viewModel.brandColor.collectAsStateWithLifecycle()
             val appearance by viewModel.appearance.collectAsStateWithLifecycle()
             val look = appearance
             // The saved look is read in a few milliseconds; the window waits for it rather than
-            // opening in the classic style and then jumping to the chosen one.
+            // opening in the default style and then jumping to the chosen one.
             if (look != null) {
                 val systemDark = isSystemInDarkTheme()
                 val dark = when (look.mode) {
@@ -63,11 +74,25 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** A notification tapped while the app is already open comes here (the activity is single-top). */
+    /** A notification, a shortcut, the widget or another app's Share tapped while the app is already open comes here (the activity is single-top). */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         openContentId = intent.getStringExtra(EXTRA_OPEN_CONTENT)
+        takeLaunchFrom(intent)
+    }
+
+    /** Leaving the app is when the widget should show what was just changed. */
+    override fun onStop() {
+        super.onStop()
+        CadyWidgetProvider.refresh(this)
+    }
+
+    private fun takeLaunchFrom(intent: Intent?) {
+        if (intent == null) return
+        // Opened again from the recent-apps list: the old intent comes back with it, and must not be taken a second time.
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+        lifecycleScope.launch { launchInbox.accept(intent) }
     }
 
     companion object {

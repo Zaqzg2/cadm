@@ -9,6 +9,7 @@ import com.cady.cadymarketing.data.brand.BrandRepository
 import com.cady.cadymarketing.data.campaign.CampaignRepository
 import com.cady.cadymarketing.data.content.ContentRepository
 import com.cady.cadymarketing.data.inventory.InventoryRepository
+import com.cady.cadymarketing.data.launch.LaunchInbox
 import com.cady.cadymarketing.data.media.ImageExporter
 import com.cady.cadymarketing.data.media.PictureStore
 import com.cady.cadymarketing.data.product.ProductRepository
@@ -16,6 +17,7 @@ import com.cady.cadymarketing.data.settings.SettingsStore
 import com.cady.cadymarketing.data.team.RoleRepository
 import com.cady.cadymarketing.data.settings.StudioPrefs
 import com.cady.cadymarketing.data.vocab.VocabularyRepository
+import com.cady.cadymarketing.domain.engine.AppLaunch
 import com.cady.cadymarketing.domain.engine.CalendarMath
 import com.cady.cadymarketing.domain.engine.ClaimChecker
 import com.cady.cadymarketing.domain.engine.CopyGenerator
@@ -29,6 +31,7 @@ import com.cady.cadymarketing.domain.engine.GatewayConfig
 import com.cady.cadymarketing.domain.engine.GatewayException
 import com.cady.cadymarketing.domain.engine.GenerationRequest
 import com.cady.cadymarketing.domain.engine.IdeaBank
+import com.cady.cadymarketing.domain.engine.IncomingRules
 import com.cady.cadymarketing.domain.engine.LinkBuilder
 import com.cady.cadymarketing.domain.engine.MergedVocabulary
 import com.cady.cadymarketing.domain.engine.Placeholders
@@ -77,6 +80,7 @@ class StudioViewModel @Inject constructor(
     private val campaignRepository: CampaignRepository,
     private val roles: RoleRepository,
     private val inventory: InventoryRepository,
+    private val launchInbox: LaunchInbox,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -184,9 +188,27 @@ class StudioViewModel @Inject constructor(
             request.campaignId?.let { id -> if (_state.value.campaigns.any { it.id == id }) selectCampaign(id) }
             request.date?.let { setScheduleDate(it) }
             if (request.ideaOfDay) applyIdeaOfDay()
-            // Nothing here was typed by the person, so closing right away must not ask to discard anything.
-            _state.update { it.copy(dirty = false) }
+            val sharedApplied = request.shared && applyShared()
+            // What a screen chose by itself was not typed by the person, so closing right away must not ask to discard it;
+            // what another app shared to this one is the person's own, so closing it asks.
+            _state.update { it.copy(dirty = sharedApplied) }
         }
+    }
+
+    /** Puts what another app shared into the post: a picture becomes the poster's picture, a text becomes the post's text. */
+    private fun applyShared(): Boolean {
+        val shared = launchInbox.takeStagedPost() ?: return false
+        when (shared) {
+            is AppLaunch.SharedPicture -> {
+                _state.update { it.copy(pictureFile = shared.fileName) }
+                shared.text?.let { onTextChange(it) }
+                IncomingRules.extraPicturesNote(shared.extraPictures)?.let { note(it) }
+                refreshVisuals()
+            }
+            is AppLaunch.SharedText -> onTextChange(shared.text)
+            else -> return false
+        }
+        return true
     }
 
     /** Opens on the idea of the day, written as a post (the same pick the home screen shows). */

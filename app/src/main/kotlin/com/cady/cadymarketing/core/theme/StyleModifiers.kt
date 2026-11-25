@@ -1,16 +1,25 @@
 package com.cady.cadymarketing.core.theme
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -30,6 +39,11 @@ fun Modifier.styledBackdrop(look: CadyStyleTokens): Modifier = drawBehind {
             glow(look.glowA, Offset(w * 0.10f, h * 0.10f), w * 0.95f)
             glow(look.glowB, Offset(w * 0.95f, h * 0.45f), w * 0.85f)
             glow(look.glowC, Offset(w * 0.20f, h * 0.95f), w * 0.90f)
+            // The glass spheres: what the cards are see-through over. They sit at the edges, away from the middle of the page.
+            orb(look.orbA, Offset(w * 0.14f, h * 0.13f), w * 0.20f, look.dark)
+            orb(look.orbB, Offset(w * 0.92f, h * 0.36f), w * 0.14f, look.dark)
+            orb(look.orbC, Offset(w * 0.12f, h * 0.78f), w * 0.22f, look.dark)
+            orb(look.orbA, Offset(w * 0.90f, h * 0.91f), w * 0.10f, look.dark)
         }
         Backdrop.WASH -> {
             drawRect(
@@ -67,7 +81,33 @@ fun Modifier.cardShadowFor(look: CadyStyleTokens, corner: Dp = look.cardCorner, 
             stackedShadow(look.shadowColor, d, d, d * 2f, r)
             stackedShadow(look.highlightColor, -d, -d, d * 2f, r)
         }
+        // The card is see-through, so the shadow is cut out from under it: only what falls outside the card is drawn.
+        CardShadow.GLASS -> drawBehind {
+            val d = look.shadowOffset.toPx() * scale
+            val r = corner.toPx()
+            val inside = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(r))) }
+            clipPath(inside, clipOp = ClipOp.Difference) {
+                stackedShadow(look.shadowColor, 0f, d, d * 2.4f, r)
+            }
+        }
     }
+
+/**
+ * A free-standing panel in the style's own material: shadow, fill, rim and rounded corners in one. The glass look uses
+ * it for the floating bottom bar and for the sign-in card; the other styles get their ordinary card.
+ */
+fun Modifier.glassPanel(
+    look: CadyStyleTokens,
+    corner: Dp = look.cardCorner,
+    brush: Brush? = look.cardBrush,
+    border: BorderStroke? = look.cardBorder,
+): Modifier {
+    val shape = RoundedCornerShape(corner)
+    var result: Modifier = this.cardShadowFor(look, corner)
+    result = if (brush != null) result.background(brush, shape) else result.background(look.cardContainer, shape)
+    if (border != null) result = result.border(border, shape)
+    return result.clip(shape)
+}
 
 /** The bottom bar's outline: rounded top corners with a lift, and a line along its top edge. */
 fun Modifier.barLook(look: CadyStyleTokens): Modifier {
@@ -119,6 +159,29 @@ private fun DrawScope.glow(color: Color, center: Offset, radius: Float) {
         brush = Brush.radialGradient(colors = listOf(color, color.copy(alpha = 0f)), center = center, radius = radius),
         radius = radius,
         center = center,
+    )
+}
+
+/**
+ * A glass sphere: a disc whose colour fades from [color] at the top-start to a quarter of it at the far side, with a
+ * thin bright rim, like a bubble. Drawn small and low-alpha: it is there to be seen through the cards, not to be looked at.
+ */
+private fun DrawScope.orb(color: Color, center: Offset, radius: Float, dark: Boolean) {
+    if (color.alpha <= 0f) return
+    drawCircle(
+        brush = Brush.linearGradient(
+            colors = listOf(color, color.copy(alpha = color.alpha * 0.25f)),
+            start = Offset(center.x - radius, center.y - radius),
+            end = Offset(center.x + radius, center.y + radius),
+        ),
+        radius = radius,
+        center = center,
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = if (dark) 0.16f else 0.45f),
+        radius = radius,
+        center = center,
+        style = Stroke(width = 1.2.dp.toPx()),
     )
 }
 

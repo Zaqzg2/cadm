@@ -4,14 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cady.cadymarketing.data.audience.AudienceRepository
 import com.cady.cadymarketing.data.catalog.CatalogRepository
+import com.cady.cadymarketing.data.launch.LaunchInbox
 import com.cady.cadymarketing.data.notify.BackgroundWork
 import com.cady.cadymarketing.data.notify.ReminderCoordinator
 import com.cady.cadymarketing.data.settings.SettingsStore
 import com.cady.cadymarketing.data.sync.SyncManager
 import com.cady.cadymarketing.data.team.RoleRepository
+import com.cady.cadymarketing.domain.engine.AppLaunch
 import com.cady.cadymarketing.domain.model.MktRole
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -31,7 +34,14 @@ class ShellViewModel @Inject constructor(
     private val reminders: ReminderCoordinator,
     private val background: BackgroundWork,
     private val settings: SettingsStore,
+    private val launchInbox: LaunchInbox,
 ) : ViewModel() {
+
+    /** What opened the app from outside and is still waiting: a shortcut, a widget button, a Share or "Open with". */
+    val pendingLaunch: StateFlow<AppLaunch?> = launchInbox.pending
+
+    /** The shell takes the request once, then opens the screen it asks for. */
+    fun takePendingLaunch(): AppLaunch? = launchInbox.takePending()
 
     fun onShellOpened() {
         when (roles.currentRole()) {

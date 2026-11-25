@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +30,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -34,13 +40,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cady.cadymarketing.core.theme.LocalCadyStyle
+import com.cady.cadymarketing.core.theme.cady
 import com.cady.cadymarketing.core.theme.cardShadowFor
 
 /** A picture kept in the app's own storage, loaded off the main thread. Shows [fallback] until it is there (or when there is none). */
@@ -82,6 +91,7 @@ fun LocalPicture(
 /**
  * The card every list item in the app uses. How it looks (white with a thin border, frosted glass,
  * a raised soft surface, …) is the chosen style's decision; see `CadyStyleTokens`.
+ * A card that can be tapped gives a little under the finger (it shrinks a touch while pressed).
  *
  * @param selected draws the card as the chosen one: a thick border in the brand colour.
  */
@@ -94,19 +104,51 @@ fun CadyCard(
 ) {
     val look = LocalCadyStyle.current
     val shape = RoundedCornerShape(look.cardCorner)
+    val brush = look.cardBrush
     val colors = CardDefaults.cardColors(
-        containerColor = look.cardContainer,
+        // A gradient fill is painted by the modifier below, so the card itself stays clear.
+        containerColor = if (brush != null) Color.Transparent else look.cardContainer,
         contentColor = look.colorScheme.onSurface,
     )
     val elevation = CardDefaults.cardElevation(defaultElevation = look.cardElevation)
     val border = if (selected) BorderStroke(2.dp, look.colorScheme.primary) else look.cardBorder
-    val styled = modifier.cardShadowFor(look)
+    val fill: Modifier = if (brush != null) Modifier.background(brush, shape) else Modifier
     if (onClick != null) {
-        Card(onClick = onClick, modifier = styled, shape = shape, colors = colors, elevation = elevation, border = border) { content() }
+        val interaction = remember { MutableInteractionSource() }
+        val pressed by interaction.collectIsPressedAsState()
+        val scale by animateFloatAsState(
+            targetValue = if (pressed) PRESSED_SCALE else 1f,
+            animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+            label = "cardPress",
+        )
+        val styled = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .cardShadowFor(look)
+            .then(fill)
+        Card(
+            onClick = onClick,
+            modifier = styled,
+            shape = shape,
+            colors = colors,
+            elevation = elevation,
+            border = border,
+            interactionSource = interaction,
+        ) { content() }
     } else {
-        Card(modifier = styled, shape = shape, colors = colors, elevation = elevation, border = border) { content() }
+        Card(
+            modifier = modifier.cardShadowFor(look).then(fill),
+            shape = shape,
+            colors = colors,
+            elevation = elevation,
+            border = border,
+        ) { content() }
     }
 }
+
+private const val PRESSED_SCALE = 0.975f
 
 /** A small rounded label ("معتمد", "عرض", "مخفي"). */
 @Composable
@@ -126,15 +168,26 @@ fun Pill(
     }
 }
 
-/** A title above a block of a form or a list. */
+/** A title above a block of a form or a list, marked by a short bar in the brand colour. */
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Row(
         modifier = modifier.padding(top = 14.dp, bottom = 6.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 4.dp, height = 14.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /** The body of a screen that has nothing to show yet: what is missing and the one thing to do about it. */
@@ -156,12 +209,12 @@ fun EmptyState(
     ) {
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(80.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(Brush.linearGradient(listOf(MaterialTheme.cady.heroStart, MaterialTheme.cady.heroEnd))),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(34.dp))
+            Icon(icon, contentDescription = null, tint = MaterialTheme.cady.onHero, modifier = Modifier.size(36.dp))
         }
         Spacer(Modifier.height(16.dp))
         Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)

@@ -3,4 +3,15 @@
     <!-- Same warm off-white page colour as Kady's light scheme. -->
     <color name="window_background">#FFF8F5F4</color>
     <color name="ic_launcher_background">#FFC62828</color>
+    <!-- Home-screen widget, glass look (day): translucent white card with a bright rim, red accents. -->
+    <color name="widget_glass_top">#EBFFFFFF</color>
+    <color name="widget_glass_bottom">#D6FFF7F5</color>
+    <color name="widget_glass_rim">#B3FFFFFF</color>
+    <color name="widget_text">#FF1F1A19</color>
+    <color name="widget_text_muted">#FF5B4F4D</color>
+    <color name="widget_chip">#1FC62828</color>
+    <color name="widget_btn">#1FC62828</color>
+    <color name="widget_btn_text">#FF9A1B1F</color>
+    <color name="widget_btn_primary">#FFC62828</color>
+    <color name="widget_btn_primary_text">#FFFFFFFF</color>
 </resources>

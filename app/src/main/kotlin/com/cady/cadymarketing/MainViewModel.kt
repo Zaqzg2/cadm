@@ -35,7 +35,7 @@ class MainViewModel @Inject constructor(
     /**
      * The style and the light/dark mode saved in Settings → المظهر. Null until the saved choice has
      * been read (a few milliseconds), so the window can wait for it instead of opening in the
-     * classic look and then jumping to the chosen one.
+     * default look and then jumping to the chosen one.
      */
     val appearance: StateFlow<Appearance?> = combine<AppStyle, ThemeMode, Appearance?>(
         settingsStore.appStyle,

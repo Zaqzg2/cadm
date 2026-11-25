@@ -13,9 +13,11 @@ data class StudioLaunch(
     val date: String? = null,
     val productId: String? = null,
     val ideaOfDay: Boolean = false,
+    /** Another app shared a picture or a text to this app: the Studio takes it from the launch inbox. */
+    val shared: Boolean = false,
 ) {
     val isEmpty: Boolean
-        get() = contentId == null && campaignId == null && date == null && productId == null && !ideaOfDay
+        get() = contentId == null && campaignId == null && date == null && productId == null && !ideaOfDay && !shared
 
     companion object {
         fun from(handle: SavedStateHandle): StudioLaunch = StudioLaunch(
@@ -24,6 +26,7 @@ data class StudioLaunch(
             date = handle.get<String>(Routes.ARG_DATE),
             productId = handle.get<String>(Routes.ARG_PRODUCT_ID),
             ideaOfDay = handle.get<String>(Routes.ARG_IDEA) == "1",
+            shared = handle.get<String>(Routes.ARG_SHARED) == "1",
         )
     }
 }

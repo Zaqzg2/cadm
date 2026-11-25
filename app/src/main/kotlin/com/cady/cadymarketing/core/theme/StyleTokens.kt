@@ -20,7 +20,7 @@ enum class Backdrop {
     /** One flat colour. */
     FLAT,
 
-    /** Three soft colour glows, so translucent cards have something to be see-through over. */
+    /** Three soft colour glows and a few glass spheres, so translucent cards have something to be see-through over. */
     BLOBS,
 
     /** A wash of the brand colour fading down from the top edge. */
@@ -36,6 +36,9 @@ enum class CardShadow {
 
     /** One solid block offset down and to the side, like a printed label. */
     HARD,
+
+    /** A wide, soft drop shadow drawn only outside the card, so a see-through card stays clean inside. */
+    GLASS,
 }
 
 /**
@@ -83,6 +86,16 @@ class CadyStyleTokens(
     val barLineWidth: Dp = 0.dp,
     val barTopCorner: Dp = 0.dp,
     val barLift: Dp = 0.dp,
+    /** A gradient fill for cards (glass). When set it is what is painted behind a card; [cardContainer] is then its average. */
+    val cardBrush: Brush? = null,
+    /** The glass spheres drawn over the page's glows (see [Backdrop.BLOBS]). */
+    val orbA: Color = Color.Transparent,
+    val orbB: Color = Color.Transparent,
+    val orbC: Color = Color.Transparent,
+    /** The bottom bar floats as a rounded pill inset from the screen's edges instead of spanning it (glass). */
+    val barFloating: Boolean = false,
+    val barBrush: Brush? = null,
+    val barBorder: BorderStroke? = null,
 ) {
     /** The same colours dressed in another style: the live previews in Settings → المظهر. */
     fun forStyle(other: AppStyle): CadyStyleTokens = buildStyleTokens(other, base, extra, dark)
@@ -90,7 +103,7 @@ class CadyStyleTokens(
 
 /** The style in force; provided by [CadyMarketingTheme]. */
 val LocalCadyStyle = staticCompositionLocalOf {
-    buildStyleTokens(AppStyle.CLASSIC, LightColorScheme, LightExtraColors, dark = false)
+    buildStyleTokens(AppStyle.DEFAULT, LightColorScheme, LightExtraColors, dark = false)
 }
 
 /** Works out [style] for the brand scheme [base] in light or dark. */
@@ -126,14 +139,23 @@ private fun classic(base: ColorScheme, extra: CadyExtraColors, dark: Boolean) = 
 )
 
 /**
- * Frosted glass. The cards are see-through with a bright edge, over soft glows in the brand colour,
- * the info blue and the amber: three tints, like light on a soap film. The blur is imitated (a
- * translucent fill over smooth glows), so it works on every Android version with no library.
+ * Frosted glass, the app's default look. The cards are see-through (lighter at the top, like light catching the
+ * pane) with a bright rim and a soft shadow that falls only outside them. Behind the page sit three glows in the
+ * brand colour, the info blue and the amber, and a few glass spheres, so the cards always have something to be
+ * see-through over. The bottom bar floats as a pill of the same glass. The blur is imitated (a translucent
+ * fill over smooth shapes), so it works on every Android version with no library.
+ *
+ * Text stays readable: the card's own fill is at least 60% white in light and a few per cent white in dark, and the
+ * tints behind it are kept faint enough that, at the worst spot on a phone screen, the body text keeps 13:1 (light) and
+ * 6.9:1 (dark), the secondary text 6.1:1 and 5.2:1, and brand-coloured text about 4.4:1 (docs/phase-8-changes.md).
  */
 private fun glass(base: ColorScheme, extra: CadyExtraColors, dark: Boolean): CadyStyleTokens {
-    val page = if (dark) lerp(base.background, Color.Black, 0.35f) else lerp(base.background, Color.White, 0.5f)
-    val edgeStart = Color.White.copy(alpha = if (dark) 0.38f else 0.95f)
-    val edgeEnd = if (dark) Color.White.copy(alpha = 0.06f) else base.outline.copy(alpha = 0.32f)
+    val page = if (dark) lerp(base.background, Color.Black, 0.38f) else lerp(base.background, Color.White, 0.55f)
+    val edgeStart = Color.White.copy(alpha = if (dark) 0.40f else 0.98f)
+    val edgeEnd = if (dark) Color.White.copy(alpha = 0.05f) else base.outline.copy(alpha = 0.30f)
+    val rim = Brush.linearGradient(listOf(edgeStart, edgeEnd))
+    val fillTop = Color.White.copy(alpha = if (dark) 0.07f else 0.78f)
+    val fillBottom = Color.White.copy(alpha = if (dark) 0.035f else 0.60f)
     return CadyStyleTokens(
         style = AppStyle.GLASS,
         dark = dark,
@@ -143,17 +165,33 @@ private fun glass(base: ColorScheme, extra: CadyExtraColors, dark: Boolean): Cad
         shapes = shapesOf(10, 14, 22, 26, 34),
         typography = CadyTypography,
         page = page,
-        cardCorner = 22.dp,
-        cardContainer = Color.White.copy(alpha = if (dark) 0.08f else 0.60f),
-        cardBorder = BorderStroke(1.dp, Brush.linearGradient(listOf(edgeStart, edgeEnd))),
+        cardCorner = 24.dp,
+        cardContainer = Color.White.copy(alpha = if (dark) 0.053f else 0.69f),
+        cardBorder = BorderStroke(1.dp, rim),
+        cardBrush = Brush.linearGradient(listOf(fillTop, fillBottom)),
+        cardShadow = CardShadow.GLASS,
+        shadowColor = if (dark) Color.Black.copy(alpha = 0.50f) else base.onBackground.copy(alpha = 0.16f),
+        shadowOffset = 5.dp,
         barContainer = if (dark) base.surfaceContainerLow.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.74f),
         barIndicator = base.primaryContainer.copy(alpha = if (dark) 0.85f else 0.90f),
         backdrop = Backdrop.BLOBS,
-        glowA = base.primary.copy(alpha = if (dark) 0.28f else 0.22f),
-        glowB = extra.info.copy(alpha = if (dark) 0.26f else 0.20f),
-        glowC = base.tertiary.copy(alpha = 0.22f),
+        glowA = base.primary.copy(alpha = if (dark) 0.28f else 0.24f),
+        glowB = extra.info.copy(alpha = if (dark) 0.26f else 0.22f),
+        glowC = base.tertiary.copy(alpha = if (dark) 0.22f else 0.24f),
+        // In dark the spheres are the deep versions of the tints, so they add colour without adding light under the text.
+        orbA = if (dark) base.primaryContainer.copy(alpha = 0.44f) else base.primary.copy(alpha = 0.24f),
+        orbB = if (dark) lerp(extra.info, Color.Black, 0.55f).copy(alpha = 0.40f) else extra.info.copy(alpha = 0.22f),
+        orbC = if (dark) lerp(base.tertiary, Color.Black, 0.55f).copy(alpha = 0.40f) else base.tertiary.copy(alpha = 0.24f),
         barLine = if (dark) Color.White.copy(alpha = 0.14f) else base.outline.copy(alpha = 0.18f),
         barLineWidth = 1.dp,
+        barFloating = true,
+        barBrush = Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = if (dark) 0.14f else 0.84f),
+                Color.White.copy(alpha = if (dark) 0.07f else 0.64f),
+            ),
+        ),
+        barBorder = BorderStroke(1.dp, rim),
     )
 }
 

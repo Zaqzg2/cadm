@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cady.cadymarketing.core.components.CadyScreen
+import com.cady.cadymarketing.core.components.Pill
 import com.cady.cadymarketing.core.theme.CadyStyleTokens
 import com.cady.cadymarketing.core.theme.LocalCadyStyle
 import com.cady.cadymarketing.core.theme.cardShadowFor
@@ -147,7 +148,13 @@ private fun StyleTile(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(style.label, style = MaterialTheme.typography.titleSmall)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(style.label, style = MaterialTheme.typography.titleSmall)
+                    if (style == AppStyle.DEFAULT) Pill(text = "الافتراضي")
+                }
                 Text(
                     text = style.blurb,
                     style = MaterialTheme.typography.bodySmall,
@@ -172,9 +179,10 @@ private fun StyleTile(
 private fun MiniCard(look: CadyStyleTokens, modifier: Modifier = Modifier) {
     val corner = look.cardCorner * 0.5f
     val shape = RoundedCornerShape(corner)
+    val brush = look.cardBrush
     var card = modifier
         .cardShadowFor(look, corner = corner, scale = 0.45f)
-        .background(look.cardContainer, shape)
+        .then(if (brush != null) Modifier.background(brush, shape) else Modifier.background(look.cardContainer, shape))
     val border = look.cardBorder
     if (border != null) card = card.border(border, shape)
 

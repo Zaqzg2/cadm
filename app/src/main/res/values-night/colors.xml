@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#FF141110</color>
+    <!-- Home-screen widget, glass look (night): smoked glass with a faint rim. -->
+    <color name="widget_glass_top">#EB2B2321</color>
+    <color name="widget_glass_bottom">#E01B1514</color>
+    <color name="widget_glass_rim">#40FFFFFF</color>
+    <color name="widget_text">#FFEDE0DD</color>
+    <color name="widget_text_muted">#FFCDBDB9</color>
+    <color name="widget_chip">#2EFFFFFF</color>
+    <color name="widget_btn">#33FFB4AB</color>
+    <color name="widget_btn_text">#FFFFB4AB</color>
+    <color name="widget_btn_primary">#FFC62828</color>
+    <color name="widget_btn_primary_text">#FFFFFFFF</color>
 </resources>

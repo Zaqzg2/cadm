@@ -1,11 +1,32 @@
 package com.cady.cadymarketing.app
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -16,9 +37,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -35,7 +63,10 @@ import com.cady.cadymarketing.core.navigation.Routes
 import com.cady.cadymarketing.core.role.canUse
 import com.cady.cadymarketing.core.theme.LocalCadyStyle
 import com.cady.cadymarketing.core.theme.barLook
+import com.cady.cadymarketing.core.theme.glassPanel
+import com.cady.cadymarketing.domain.engine.AppLaunch
 import com.cady.cadymarketing.domain.engine.Feature
+import com.cady.cadymarketing.domain.engine.LaunchTab
 import com.cady.cadymarketing.feature.audience.AudienceScreen
 import com.cady.cadymarketing.feature.audience.SendListScreen
 import com.cady.cadymarketing.feature.calendar.CalendarScreen
@@ -86,6 +117,29 @@ fun MainShell(
         }
     }
 
+    // A long-press shortcut, a widget button, or another app's Share / "Open with": the request waits in the launch
+    // inbox until this shell exists (so it also survives the sign-in screen), then it is taken once and opened.
+    val pendingLaunch by shell.pendingLaunch.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingLaunch) {
+        if (pendingLaunch == null) return@LaunchedEffect
+        when (val launch = shell.takePendingLaunch()) {
+            null -> Unit
+            AppLaunch.NewPost -> navController.navigate(Routes.studio()) { launchSingleTop = true }
+            AppLaunch.IdeaOfDay -> navController.navigate(Routes.studio(ideaOfDay = true)) { launchSingleTop = true }
+            is AppLaunch.OpenTab -> when (launch.tab) {
+                LaunchTab.HOME -> navController.openTab(BottomTab.HOME)
+                LaunchTab.CALENDAR -> navController.openTab(BottomTab.CALENDAR)
+                LaunchTab.CAMPAIGNS -> navController.openTab(BottomTab.CAMPAIGNS)
+                LaunchTab.LIBRARY -> navController.navigate(Routes.LIBRARY) { launchSingleTop = true }
+            }
+            is AppLaunch.SharedPicture -> navController.navigate(Routes.studio(shared = true))
+            is AppLaunch.SharedText -> navController.navigate(Routes.studio(shared = true))
+            // A JSON file (a backup or the inventory snapshot) is read by the settings screen, which owns both flows. It reads
+            // the file when it is created, so it is opened fresh (not reused) even if Settings is already open.
+            is AppLaunch.SharedFile -> navController.navigate(Routes.SETTINGS)
+        }
+    }
+
     Scaffold(
         // See-through: the page is drawn once behind the whole app by the theme.
         containerColor = Color.Transparent,
@@ -104,10 +158,11 @@ fun MainShell(
             navController = navController,
             startDestination = Routes.HOME,
             modifier = Modifier.padding(innerPadding),
-            // The default 700 ms cross-fade feels slow; a short fade keeps navigation snappy.
-            enterTransition = { fadeIn(tween(160)) },
+            // The default 700 ms cross-fade feels slow; a short fade that settles in from just under full size keeps
+            // navigation snappy and gives the screens a little depth.
+            enterTransition = { fadeIn(tween(200)) + scaleIn(animationSpec = tween(200), initialScale = 0.97f) },
             exitTransition = { fadeOut(tween(120)) },
-            popEnterTransition = { fadeIn(tween(160)) },
+            popEnterTransition = { fadeIn(tween(200)) + scaleIn(animationSpec = tween(200), initialScale = 0.97f) },
             popExitTransition = { fadeOut(tween(120)) },
         ) {
             composable(Routes.HOME) {
@@ -118,6 +173,7 @@ fun MainShell(
                     onLibrary = { navController.navigate(Routes.LIBRARY) },
                     onCampaigns = { navController.openTab(BottomTab.CAMPAIGNS) },
                     onProducts = { navController.navigate(Routes.PRODUCTS) },
+                    onCalendar = { navController.openTab(BottomTab.CALENDAR) },
                 )
             }
             // The Studio can be opened on a saved post, a campaign, a day, a product or the idea of the day;
@@ -231,6 +287,7 @@ private val studioArguments = listOf(
     Routes.ARG_DATE,
     Routes.ARG_PRODUCT_ID,
     Routes.ARG_IDEA,
+    Routes.ARG_SHARED,
 ).map { name ->
     navArgument(name) {
         type = NavType.StringType
@@ -245,6 +302,10 @@ private fun MarketingBottomBar(
     onTabClick: (BottomTab) -> Unit,
 ) {
     val look = LocalCadyStyle.current
+    if (look.barFloating) {
+        GlassBottomBar(currentDestination = currentDestination, onTabClick = onTabClick)
+        return
+    }
     NavigationBar(
         modifier = Modifier.barLook(look),
         containerColor = look.barContainer,
@@ -276,5 +337,105 @@ private fun NavHostController.openTab(tab: BottomTab) {
             launchSingleTop = true
             restoreState = true
         }
+    }
+}
+
+/**
+ * The glass look's bottom bar: a pill of glass that floats above the page, inset from the edges and clear of the
+ * system's gesture area. The selected tab sits in a soft pill of the brand's light colour; a tab gives a little when pressed.
+ */
+@Composable
+private fun GlassBottomBar(
+    currentDestination: NavDestination?,
+    onTabClick: (BottomTab) -> Unit,
+) {
+    val look = LocalCadyStyle.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .glassPanel(look, corner = 30.dp, brush = look.barBrush, border = look.barBorder)
+                .padding(horizontal = 6.dp, vertical = 6.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BottomTab.entries.forEach { tab ->
+                val selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true
+                GlassTab(
+                    tab = tab,
+                    selected = selected,
+                    onClick = { onTabClick(tab) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassTab(
+    tab: BottomTab,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val look = LocalCadyStyle.current
+    val scheme = look.colorScheme
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+        label = "tabPress",
+    )
+    val pill by animateColorAsState(
+        targetValue = if (selected) look.barIndicator else Color.Transparent,
+        animationSpec = tween(220),
+        label = "tabPill",
+    )
+    Column(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(22.dp))
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(56.dp)
+                .height(30.dp)
+                .clip(CircleShape)
+                .background(pill),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = tab.icon,
+                contentDescription = null,
+                tint = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Text(
+            text = tab.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }

@@ -11,10 +11,18 @@ class AppStyleTest {
     }
 
     @Test
-    fun nothingSavedOrAnUnknownIdIsTheClassicLook() {
-        assertEquals(AppStyle.CLASSIC, AppStyle.fromId(null))
-        assertEquals(AppStyle.CLASSIC, AppStyle.fromId(""))
-        assertEquals(AppStyle.CLASSIC, AppStyle.fromId("a-style-from-a-later-version"))
+    fun nothingSavedOrAnUnknownIdIsTheGlassLook() {
+        // Phase 8: glass is what the app opens with until a style is picked.
+        assertEquals(AppStyle.GLASS, AppStyle.DEFAULT)
+        assertEquals(AppStyle.GLASS, AppStyle.fromId(null))
+        assertEquals(AppStyle.GLASS, AppStyle.fromId(""))
+        assertEquals(AppStyle.GLASS, AppStyle.fromId("a-style-from-a-later-version"))
+    }
+
+    @Test
+    fun aStyleThatWasPickedIsKeptEvenWhenItIsNotTheDefault() {
+        // A phone that saved "classic" in phase 7 must stay classic.
+        assertEquals(AppStyle.CLASSIC, AppStyle.fromId("classic"))
     }
 
     @Test
@@ -47,9 +55,9 @@ class AppStyleTest {
     }
 
     @Test
-    fun theDefaultAppearanceIsTheClassicLookFollowingThePhone() {
+    fun theDefaultAppearanceIsTheGlassLookFollowingThePhone() {
         val default = Appearance()
-        assertEquals(AppStyle.CLASSIC, default.style)
+        assertEquals(AppStyle.GLASS, default.style)
         assertEquals(ThemeMode.SYSTEM, default.mode)
     }
 }

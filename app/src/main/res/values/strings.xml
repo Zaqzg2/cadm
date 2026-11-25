@@ -1,4 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">كادي للتسويق</string>
+    <!-- Options on the launcher icon (long press). Short labels stay under 10 letters. -->
+    <string name="shortcut_new_post_short">منشور جديد</string>
+    <string name="shortcut_new_post_long">كتابة منشور جديد</string>
+    <string name="shortcut_idea_short">فكرة اليوم</string>
+    <string name="shortcut_idea_long">الكتابة بفكرة اليوم</string>
+    <string name="shortcut_calendar_short">التقويم</string>
+    <string name="shortcut_calendar_long">تقويم المحتوى</string>
+    <string name="shortcut_library_short">المكتبة</string>
+    <string name="shortcut_library_long">مكتبة المحتوى</string>
+    <string name="shortcut_disabled">هذا الاختصار غير متاح الآن</string>
+
+    <!-- Home-screen widget -->
+    <string name="widget_label">كادي للتسويق · اليوم</string>
+    <string name="widget_description">أرقام اليوم، وأقرب منشور مجدول، وأزرار سريعة لمنشور جديد وفكرة اليوم والتقويم.</string>
+    <string name="widget_preview_subtitle">التالي: سائل جلي كادي · اليوم 14:30</string>
+    <string name="widget_stat_drafts">مسودات</string>
+    <string name="widget_stat_pending">بانتظار الاعتماد</string>
+    <string name="widget_stat_week">هذا الأسبوع</string>
+    <string name="widget_action_new">منشور جديد</string>
+    <string name="widget_action_idea">فكرة اليوم</string>
+    <string name="widget_action_calendar">التقويم</string>
+    <string name="widget_sign_in">سجّل الدخول من التطبيق</string>
+    <string name="widget_next">التالي: %1$s · %2$s</string>
+    <string name="widget_late">%1$s منشور تجاوز موعده</string>
 </resources>
