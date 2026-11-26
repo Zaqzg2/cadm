@@ -9,15 +9,22 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -34,6 +41,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -41,16 +51,17 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,7 +70,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,41 +77,58 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.cady.cadymarketing.core.role.LocalRole
+import com.cady.cadymarketing.core.components.CadyCard
 import com.cady.cadymarketing.core.components.EmptyState
+import com.cady.cadymarketing.core.role.LocalRole
 import com.cady.cadymarketing.core.theme.LocalCadyStyle
 import com.cady.cadymarketing.core.theme.barLook
 import com.cady.cadymarketing.core.theme.cady
+import com.cady.cadymarketing.core.theme.glassPanel
 import com.cady.cadymarketing.core.theme.topBarLook
 import com.cady.cadymarketing.core.util.Clipboard
+import com.cady.cadymarketing.domain.engine.ClaimChecker
 import com.cady.cadymarketing.domain.engine.ContentFlow
 import com.cady.cadymarketing.domain.engine.NoteLevel
 import com.cady.cadymarketing.domain.engine.StockNote
-import com.cady.cadymarketing.domain.engine.ClaimChecker
-import com.cady.cadymarketing.domain.model.CheckResult
+import com.cady.cadymarketing.domain.model.AppStyle
+import com.cady.cadymarketing.domain.model.Channel
 import com.cady.cadymarketing.domain.model.Issue
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** How long "save and exit" waits for the save to finish before it gives up and leaves the screen open. */
+private const val EXIT_SAVE_TIMEOUT_MS = 5_000L
 
 /**
- * The Studio: a full-screen workspace (no bottom bar). The live poster and text stay at the top, the open
- * tool's panel sits below them and never covers the preview, the six tools are at the very bottom.
+ * The Studio: a full-screen workspace. The live poster and its text stay at the top, the open tool's panel sits below
+ * them and never covers the preview, and the six tools float at the bottom like the app's own bar.
  */
 @Composable
 fun StudioScreen(
@@ -114,13 +141,17 @@ fun StudioScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var showSaved by remember { mutableStateOf(false) }
+    var showShare by remember { mutableStateOf(false) }
+    var showPreview by remember { mutableStateOf(false) }
     var showGateway by remember { mutableStateOf(false) }
     var showClose by remember { mutableStateOf(false) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     var showNewCampaign by remember { mutableStateOf(false) }
+    var exitAfterSave by remember { mutableStateOf(false) }
 
-    // While the keyboard is open the poster shrinks and the formulas row hides, so the text field keeps room.
+    // While the keyboard is open the poster shrinks, the formulas row hides and the tool bar keeps only its icons,
+    // so the text field keeps room.
     val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     val say: (String) -> Unit = { text ->
@@ -138,6 +169,16 @@ fun StudioScreen(
         }
     }
     BackHandler(onBack = requestClose)
+
+    // "Save and exit" leaves once the draft is no longer dirty. When it cannot be saved (no text, a failed write) the
+    // screen stays open and the message says why.
+    LaunchedEffect(exitAfterSave) {
+        if (exitAfterSave) {
+            val saved = withTimeoutOrNull(EXIT_SAVE_TIMEOUT_MS) { snapshotFlow { state.dirty }.first { !it } }
+            exitAfterSave = false
+            if (saved != null) onClose()
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -163,6 +204,7 @@ fun StudioScreen(
     }
 
     val actions = StudioActions(
+        onToggleTool = viewModel::toggleTool,
         onProduct = viewModel::selectProduct,
         onChannel = viewModel::selectChannel,
         onTone = viewModel::selectTone,
@@ -189,9 +231,12 @@ fun StudioScreen(
         onRemovePicture = viewModel::removePicture,
         onPickDate = { showDate = true },
         onPickTime = { showTime = true },
+        onSetDate = viewModel::setScheduleDate,
         onClearSchedule = viewModel::clearSchedule,
         onCampaign = viewModel::selectCampaign,
         onNewCampaign = { showNewCampaign = true },
+        onOpenSaved = viewModel::loadSaved,
+        onShowSaved = { showSaved = true },
         loadThumb = viewModel::loadThumb,
     )
 
@@ -204,20 +249,22 @@ fun StudioScreen(
         snackbarHost = { SnackbarHost(hostState = snackbar) },
         topBar = {
             StudioTopBar(
-                productName = state.product?.name ?: "الاستوديو",
+                title = state.product?.name ?: "الاستوديو",
+                subtitle = topBarSubtitle(state),
                 hasText = state.currentText.isNotBlank(),
                 canApprove = state.canApprove,
                 submitLabel = ContentFlow.submitLabel(LocalRole.current),
                 onClose = requestClose,
-                onShare = viewModel::share,
-                onSaveImage = viewModel::saveImage,
-                onCopy = viewModel::copyText,
-                onHistory = { showSaved = true },
                 onSave = { viewModel.save(false) },
+                onShare = { showShare = true },
                 onApprove = { viewModel.save(true) },
             )
         },
-        bottomBar = { StudioToolBar(openTool = state.openTool, onTool = viewModel::toggleTool) },
+        bottomBar = {
+            if (!state.loading && state.products.isNotEmpty()) {
+                StudioToolBar(state = state, compact = keyboardOpen, onTool = viewModel::toggleTool)
+            }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -238,18 +285,45 @@ fun StudioScreen(
                 )
             } else {
                 if (!keyboardOpen) state.stockNote?.let { StockBanner(it) }
-                PreviewRow(state, compact = keyboardOpen)
+                PreviewRow(
+                    state = state,
+                    compact = keyboardOpen,
+                    onEnlarge = { showPreview = true },
+                    onWrite = {
+                        if (state.openTool != StudioTool.TEXT) viewModel.toggleTool(StudioTool.TEXT)
+                    },
+                )
                 if (!keyboardOpen) FormulaRow(state, viewModel::selectFormula)
-                HorizontalDivider()
-                Box(modifier = Modifier.weight(1f)) {
-                    ToolPanel(state, actions)
-                }
+                ToolPanel(
+                    state = state,
+                    actions = actions,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
+                )
             }
         }
     }
 
+    if (showShare) {
+        ShareSheet(
+            onDismiss = { showShare = false },
+            onShare = viewModel::share,
+            onSaveImage = viewModel::saveImage,
+            onCopy = viewModel::copyText,
+        )
+    }
+    if (showPreview) {
+        PreviewDialog(
+            channel = state.channel,
+            small = state.preview,
+            loadLarge = viewModel::renderLargePreview,
+            onDismiss = { showPreview = false },
+        )
+    }
     if (showSaved) {
-        SavedContentDialog(
+        SavedContentSheet(
             saved = state.saved,
             onOpen = { content ->
                 viewModel.loadSaved(content)
@@ -274,6 +348,12 @@ fun StudioScreen(
     }
     if (showClose) {
         CloseConfirmDialog(
+            canSave = state.currentText.isNotBlank(),
+            onSave = {
+                showClose = false
+                viewModel.save(false)
+                exitAfterSave = true
+            },
             onDiscard = {
                 showClose = false
                 onClose()
@@ -314,21 +394,32 @@ fun StudioScreen(
 
 // ---------------------------------------------------------------------- top bar
 
+/** The channel the post is for and whether the work is saved: "واتساب (بث) · لم يُحفظ". */
+private fun topBarSubtitle(state: StudioState): String {
+    val parts = mutableListOf(state.channel.label)
+    when {
+        state.dirty -> parts += "لم يُحفظ"
+        state.editingId != null -> parts += "محفوظ"
+    }
+    return parts.joinToString(" · ")
+}
+
+/**
+ * Leave, what this is, then the three things you do with it: save a draft, share it, send it on. Sharing opens a
+ * sheet, so the bar stays as light as it is.
+ */
 @Composable
 private fun StudioTopBar(
-    productName: String,
+    title: String,
+    subtitle: String,
     hasText: Boolean,
     canApprove: Boolean,
     submitLabel: String,
     onClose: () -> Unit,
-    onShare: (ShareTarget) -> Unit,
-    onSaveImage: () -> Unit,
-    onCopy: () -> Unit,
-    onHistory: () -> Unit,
     onSave: () -> Unit,
+    onShare: () -> Unit,
     onApprove: () -> Unit,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     Surface(
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -338,178 +429,220 @@ private fun StudioTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(56.dp)
+                .height(60.dp)
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onClose) {
                 Icon(Icons.Filled.Close, contentDescription = "إغلاق")
             }
-            Text(
-                text = productName,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Box {
-                IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.Share, contentDescription = "مشاركة")
-                }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text("مشاركة عبر واتساب") },
-                        onClick = {
-                            menuOpen = false
-                            onShare(ShareTarget.WHATSAPP)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("مشاركة عبر واتساب للأعمال") },
-                        onClick = {
-                            menuOpen = false
-                            onShare(ShareTarget.WHATSAPP_BUSINESS)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("مشاركة عبر تطبيق آخر") },
-                        onClick = {
-                            menuOpen = false
-                            onShare(ShareTarget.OTHER)
-                        },
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text("حفظ الصورة في csdy") },
-                        onClick = {
-                            menuOpen = false
-                            onSaveImage()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("نسخ النص") },
-                        onClick = {
-                            menuOpen = false
-                            onCopy()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("المحتوى المحفوظ") },
-                        onClick = {
-                            menuOpen = false
-                            onHistory()
-                        },
-                    )
-                }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            TextButton(onClick = onSave, enabled = hasText) { Text("حفظ") }
+            IconButton(onClick = onSave, enabled = hasText) {
+                Icon(Icons.Filled.Save, contentDescription = "حفظ كمسودة")
+            }
+            IconButton(onClick = onShare, enabled = hasText) {
+                Icon(Icons.Filled.Share, contentDescription = "مشاركة")
+            }
+            Spacer(Modifier.width(4.dp))
             Button(
                 onClick = onApprove,
                 enabled = canApprove,
-                contentPadding = PaddingValues(horizontal = 14.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
             ) { Text(submitLabel) }
+            Spacer(Modifier.width(4.dp))
         }
     }
 }
 
-// ---------------------------------------------------------------------- preview and text
+// ---------------------------------------------------------------------- stock, preview and text
 
 /** One line above the preview about the product's stock: a warning when it ran out or is low, good news for a surplus. */
 @Composable
 private fun StockBanner(note: StockNote) {
     val warning = note.level == NoteLevel.WARNING
     val scheme = MaterialTheme.colorScheme
-    Text(
-        text = (if (warning) "⚠ " else "ℹ ") + note.text,
-        style = MaterialTheme.typography.bodySmall,
-        color = if (warning) scheme.onErrorContainer else scheme.onSecondaryContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (warning) scheme.errorContainer else scheme.secondaryContainer)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-}
-
-@Composable
-private fun PreviewRow(state: StudioState, compact: Boolean) {
-    val configuration = LocalConfiguration.current
-    val posterHeight = configuration.screenHeightDp.dp * (if (compact) 0.14f else 0.26f)
-    val posterWidth = minOf(posterHeight * state.channel.aspect, configuration.screenWidthDp.dp * 0.46f)
+    val container = if (warning) scheme.errorContainer else scheme.secondaryContainer
+    val content = if (warning) scheme.onErrorContainer else scheme.onSecondaryContainer
+    val shape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .clip(shape)
+            .background(container.copy(alpha = 0.92f))
+            .border(1.dp, content.copy(alpha = 0.18f), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        PosterBox(bitmap = state.preview, aspect = state.channel.aspect, modifier = Modifier.width(posterWidth))
-        TextSummary(state = state, modifier = Modifier.weight(1f).height(posterHeight))
+        Icon(
+            imageVector = if (warning) Icons.Filled.Warning else Icons.Filled.Info,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = note.text,
+            style = MaterialTheme.typography.bodySmall,
+            color = content,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * The poster and the text it carries, side by side. The poster is the one big thing on the screen: a tap opens it
+ * large. The text card opens the text tool, so what you read is what you edit.
+ */
+@Composable
+private fun PreviewRow(state: StudioState, compact: Boolean, onEnlarge: () -> Unit, onWrite: () -> Unit) {
+    val configuration = LocalConfiguration.current
+    val aspect = state.channel.aspect
+    val frame = 5.dp
+    val maxHeight = configuration.screenHeightDp.dp * (if (compact) 0.15f else 0.30f)
+    val innerWidth = minOf(
+        (maxHeight - frame * 2) * aspect,
+        configuration.screenWidthDp.dp * 0.44f - frame * 2,
+    )
+    val cardHeight = innerWidth / aspect + frame * 2
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PosterCard(
+            bitmap = state.preview,
+            channel = state.channel,
+            innerWidth = innerWidth,
+            frame = frame,
+            onClick = onEnlarge,
+        )
+        TextCard(
+            state = state,
+            onClick = onWrite,
+            modifier = Modifier
+                .weight(1f)
+                .height(cardHeight),
+        )
     }
 }
 
 @Composable
-private fun PosterBox(bitmap: Bitmap?, aspect: Float, modifier: Modifier) {
-    Box(
-        modifier = modifier
-            .aspectRatio(aspect)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (bitmap != null) {
-            val image = remember(bitmap) { bitmap.asImageBitmap() }
-            Image(
-                bitmap = image,
-                contentDescription = "معاينة الملصق",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-        }
-    }
-}
-
-@Composable
-private fun TextSummary(state: StudioState, modifier: Modifier) {
-    val scheme = MaterialTheme.colorScheme
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = scheme.surfaceContainerLowest,
-        border = BorderStroke(1.dp, scheme.outlineVariant),
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            CheckBadge(check = state.check, hasText = state.currentText.isNotBlank())
-            Spacer(Modifier.height(6.dp))
+private fun PosterCard(bitmap: Bitmap?, channel: Channel, innerWidth: Dp, frame: Dp, onClick: () -> Unit) {
+    val look = LocalCadyStyle.current
+    val corner = maxOf(minOf(look.cardCorner - frame, 16.dp), 4.dp)
+    CadyCard(onClick = onClick, modifier = Modifier.width(innerWidth + frame * 2)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(frame)
+                .aspectRatio(channel.aspect)
+                .clip(RoundedCornerShape(corner))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (bitmap != null) {
+                val image = remember(bitmap) { bitmap.asImageBitmap() }
+                Image(
+                    bitmap = image,
+                    contentDescription = "معاينة الملصق، اضغط لتكبيرها",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
             Text(
-                text = rememberHighlighted(state.currentText, state.check.errors),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                text = ltr(channel.sizeLabel),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+            Icon(
+                imageVector = Icons.Filled.OpenInFull,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .padding(5.dp),
             )
         }
     }
 }
 
 @Composable
-private fun CheckBadge(check: CheckResult, hasText: Boolean) {
-    if (!hasText) {
-        Text("لا يوجد نص", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    if (check.passed) {
-        val advice = check.warnings.distinctBy { it.message }.size
-        Text(
-            text = if (advice == 0) "✓ اجتاز الفحص" else "✓ اجتاز الفحص · $advice نصيحة",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.cady.success,
-        )
-    } else {
-        val count = check.errors.distinctBy { it.message }.size
-        Text(
-            text = "⚠ $count ملاحظة",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.error,
-        )
+private fun TextCard(state: StudioState, onClick: () -> Unit, modifier: Modifier) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val hasText = state.currentText.isNotBlank()
+    CadyCard(onClick = onClick, modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CheckChip(check = state.check, hasText = hasText, modifier = Modifier.weight(1f, fill = false))
+                if (hasText) {
+                    Spacer(Modifier.width(8.dp))
+                    CharCounter(length = state.currentText.length, limit = state.channel.softLimit)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            if (hasText) {
+                Text(
+                    text = rememberHighlighted(state.currentText, state.check.errors),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
+                )
+            } else {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, tint = muted, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "اضغط لكتابة نص المنشور أو اختيار صيغة",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = muted,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -529,20 +662,33 @@ private fun rememberHighlighted(text: String, errors: List<Issue>): AnnotatedStr
     }
 }
 
+/** The versions of the text (the direct one, the AI's, the ideas'): pick one and the poster and text follow. */
 @Composable
 private fun FormulaRow(state: StudioState, onSelect: (Int) -> Unit) {
     if (state.formulas.isEmpty()) return
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        itemsIndexed(state.formulas) { index, formula ->
-            FilterChip(
-                selected = index == state.formulaIndex,
-                onClick = { onSelect(index) },
-                label = { Text(formula.name) },
-            )
+        Text(
+            text = "الصيغ",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyRow(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            itemsIndexed(state.formulas) { index, formula ->
+                FilterChip(
+                    selected = index == state.formulaIndex,
+                    onClick = { onSelect(index) },
+                    label = { Text(formula.name) },
+                )
+            }
         }
     }
 }
@@ -560,40 +706,161 @@ private val toolDefs = listOf(
     ToolDef(StudioTool.SCHEDULE, "الموعد", Icons.Filled.CalendarMonth),
 )
 
+/** A dot on a tool: [color] says how much it matters, [note] says it to a screen reader. */
+private class ToolBadge(val color: Color, val note: String)
+
+/** What a tool wants you to know without opening it: the text has notes, the picture is this post's own, a schedule is set. */
 @Composable
-private fun StudioToolBar(openTool: StudioTool?, onTool: (StudioTool) -> Unit) {
+private fun toolBadge(tool: StudioTool, state: StudioState): ToolBadge? {
+    val scheme = MaterialTheme.colorScheme
+    val extra = MaterialTheme.cady
+    return when (tool) {
+        StudioTool.TEXT -> when {
+            state.currentText.isBlank() -> null
+            state.check.errors.isNotEmpty() -> ToolBadge(scheme.error, "فيه ملاحظات تمنع الاعتماد")
+            state.check.warnings.isNotEmpty() -> ToolBadge(extra.warning, "فيه نصائح")
+            else -> null
+        }
+        StudioTool.PICTURE ->
+            if (state.pictureFile != null) ToolBadge(extra.info, "صورة خاصة بهذا المنشور") else null
+        StudioTool.SCHEDULE ->
+            if (state.scheduledAt != null || state.campaignId != null) ToolBadge(extra.success, "فيه حملة أو موعد") else null
+        else -> null
+    }
+}
+
+/**
+ * The six tools. In the glass look this is the same floating pill as the app's own bar, so the Studio does not feel like
+ * another app; in the other looks it is the flat bar of that look. With the keyboard open it keeps only the icons.
+ */
+@Composable
+private fun StudioToolBar(state: StudioState, compact: Boolean, onTool: (StudioTool) -> Unit) {
     val look = LocalCadyStyle.current
-    Surface(color = look.barContainer, tonalElevation = 2.dp, modifier = Modifier.barLook(look)) {
-        Row(
+    val items: @Composable RowScope.() -> Unit = {
+        toolDefs.forEach { def ->
+            ToolItem(
+                def = def,
+                selected = state.openTool == def.tool,
+                badge = toolBadge(def.tool, state),
+                compact = compact,
+                onClick = { onTool(def.tool) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+    if (look.barFloating) {
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(vertical = 4.dp),
+                .padding(horizontal = 18.dp, vertical = if (compact) 6.dp else 10.dp),
         ) {
-            toolDefs.forEach { def ->
-                val selected = openTool == def.tool
-                val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onTool(def.tool) }
-                        .padding(vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(28.dp)
-                            .height(3.dp)
-                            .background(
-                                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                shape = RoundedCornerShape(2.dp),
-                            ),
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Icon(def.icon, contentDescription = null, tint = color)
-                    Text(def.label, style = MaterialTheme.typography.labelSmall, color = color, maxLines = 1)
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glassPanel(look, corner = 30.dp, brush = look.barBrush, border = look.barBorder)
+                    .padding(horizontal = 6.dp, vertical = 6.dp)
+                    .selectableGroup(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+                content = items,
+            )
+        }
+    } else {
+        Surface(color = look.barContainer, tonalElevation = 2.dp, modifier = Modifier.barLook(look)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(vertical = 4.dp)
+                    .selectableGroup(),
+                content = items,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToolItem(
+    def: ToolDef,
+    selected: Boolean,
+    badge: ToolBadge?,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val look = LocalCadyStyle.current
+    val scheme = look.colorScheme
+    val haptic = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+        label = "toolPress",
+    )
+    val pill by animateColorAsState(
+        targetValue = if (selected) look.barIndicator else Color.Transparent,
+        animationSpec = tween(220),
+        label = "toolPill",
+    )
+    val selectedTint = when {
+        look.barSelected != Color.Unspecified -> look.barSelected
+        look.style == AppStyle.CLASSIC -> scheme.onSecondaryContainer
+        else -> scheme.onPrimaryContainer
+    }
+    Column(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
             }
+            .clip(RoundedCornerShape(22.dp))
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Tab,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
+            )
+            .semantics { badge?.let { stateDescription = it.note } }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(56.dp)
+                .height(if (compact) 34.dp else 30.dp)
+                .clip(CircleShape)
+                .background(pill),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = def.icon,
+                contentDescription = if (compact) def.label else null,
+                tint = if (selected) selectedTint else scheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            if (badge != null) {
+                StatusDot(
+                    color = badge.color,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 3.dp, end = 10.dp),
+                )
+            }
+        }
+        if (!compact) {
+            Text(
+                text = def.label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
     }
 }

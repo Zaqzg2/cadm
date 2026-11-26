@@ -661,6 +661,15 @@ class StudioViewModel @Inject constructor(
     suspend fun loadThumb(fileName: String): android.graphics.Bitmap? =
         withContext(Dispatchers.IO) { pictures.load(fileName, CARD_THUMB_SIDE) }
 
+    /** A sharper rendering of the poster, for the full-screen preview. Nothing in the state changes. */
+    suspend fun renderLargePreview(): android.graphics.Bitmap? {
+        val s = _state.value
+        val product = s.product ?: return null
+        return withContext(Dispatchers.Default) {
+            renderer.render(product, s.brand, s.channel, s.designId, s.effectivePicture, LARGE_PREVIEW_WIDTH)
+        }
+    }
+
     // ------------------------------------------------------------------ small helpers
 
     private fun note(text: String) {
@@ -681,7 +690,8 @@ class StudioViewModel @Inject constructor(
 
     private companion object {
         const val PREVIEW_WIDTH = 540
-        const val THUMB_WIDTH = 220
+        const val LARGE_PREVIEW_WIDTH = 900
+        const val THUMB_WIDTH = 300
         const val CARD_THUMB_SIDE = 240
         const val PREVIEW_DEBOUNCE_MS = 120L
         const val DEFAULT_TIME = "09:00"
